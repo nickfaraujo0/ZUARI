@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-river: #123c36;
+  --color-river-deep: #0c2a26;
+  --color-river-soft: #1b4f47;
+  --color-teal: #3f6868;
+  --color-mist: #7ea7a1;
+  --color-sand: #d6c3a0;
+  --color-sand-soft: #ece3cf;
+  --color-laterite: #9a6047;
+  --color-ivory: #f5f2ea;
+  --color-charcoal: #18201e;
+  --color-line: #e4dfd2;
+  --color-muted: #6b7572;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-cormorant), Georgia, serif;
+  --font-mono: var(--font-plex), ui-monospace, monospace;
+}
+
+html { -webkit-text-size-adjust: 100%; }
+body { background: var(--color-ivory); color: var(--color-charcoal); font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+::selection { background: var(--color-sand); }
+input, select, textarea, button { font: inherit; }
+input[type="range"] { accent-color: var(--color-river); }
+.shadow-card { box-shadow: 0 1px 2px rgba(18, 60, 54, 0.04), 0 4px 16px rgba(18, 60, 54, 0.04); }
+.scroll-hide::-webkit-scrollbar { display: none; }
+.scroll-hide { scrollbar-width: none; }
+@keyframes flow { from { background-position: 0 0; } to { background-position: 32px 0; } }
+.flow-bar { background-image: repeating-linear-gradient(115deg, rgba(255,255,255,.18) 0 8px, transparent 8px 16px); background-size: 32px 100%; animation: flow 1.6s linear infinite; }
