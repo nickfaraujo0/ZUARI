@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { requireProject, taskScope } from "@/lib/access";
+import { TaskComments } from "@/components/comments";
 import { DeleteTask, TaskForm } from "@/components/tasks";
 import { Avatar, Card, CardHead, Chip, Photo } from "@/components/ui";
 import { fmtDate, fmtTime, TASK_STATUS, TASK_TONE } from "@/lib/utils";
@@ -15,10 +16,11 @@ export default async function EditTask({ params }: { params: Promise<{ id: strin
   const p = await requireProject(u, id);
   const task = await prisma.task.findFirst({ where: { id: taskId, ...taskScope(u), projectId: p.id } });
   if (!task) notFound();
-  const [phases, people, updates] = await Promise.all([
+  const [phases, people, updates, comments] = await Promise.all([
     prisma.projectPhase.findMany({ where: { projectId: p.id }, orderBy: { position: "asc" }, select: { id: true, name: true } }),
     prisma.user.findMany({ where: { companyId: u.companyId, active: true }, select: { id: true, name: true, role: true }, orderBy: { name: "asc" } }),
     prisma.progressUpdate.findMany({ where: { taskId: task.id, companyId: u.companyId }, include: { user: { select: { name: true } }, photos: { select: { id: true } } }, orderBy: { createdAt: "desc" } }),
+    prisma.taskComment.findMany({ where: { taskId: task.id, companyId: u.companyId }, include: { user: { select: { name: true } } }, orderBy: { createdAt: "asc" } }),
   ]);
   return (
     <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_400px]">
@@ -40,6 +42,7 @@ export default async function EditTask({ params }: { params: Promise<{ id: strin
           {!updates.length && <li className="px-5 py-8 text-sm text-muted">No site updates on this task yet.</li>}
         </ul>
       </Card>
+      <Card className="p-5 xl:col-span-2"><TaskComments taskId={task.id} comments={comments} /></Card>
     </div>
   );
 }

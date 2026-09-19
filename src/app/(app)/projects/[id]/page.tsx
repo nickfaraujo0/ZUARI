@@ -5,7 +5,7 @@ import { isManager, requireProject } from "@/lib/access";
 import { setProjectStatus } from "@/actions/projects";
 import { ActionForm, AutoSelect } from "@/components/forms";
 import { ActivityFeed, PhotoTile } from "@/components/blocks";
-import { Avatar, Card, CardHead, Chip, Progress, Stat } from "@/components/ui";
+import { Avatar, Card, CardHead, Chip, LinkButton, Progress, Stat } from "@/components/ui";
 import { dueLabel, formatINR, fmtDate, opts, PROJECT_STATUS, PRIORITY, PRIORITY_TONE, startOfToday, TASK_STATUS, TASK_TONE } from "@/lib/utils";
 
 export const metadata = { title: "Project overview" };
@@ -77,6 +77,7 @@ export default async function Overview({ params }: { params: Promise<{ id: strin
             <Card className="p-5">
               <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Project status</p>
               <ActionForm action={setProjectStatus} hideSubmit><input type="hidden" name="projectId" value={p.id} /><AutoSelect name="status" defaultValue={p.status} options={opts(PROJECT_STATUS)} className="h-10 w-full text-sm" /></ActionForm>
+              <LinkButton href={`/projects/${p.id}/edit`} variant="secondary" size="sm" className="mt-4">Edit project details</LinkButton>
               {p.description && <p className="mt-4 text-sm leading-relaxed text-muted">{p.description}</p>}
             </Card>
           )}

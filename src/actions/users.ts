@@ -3,8 +3,8 @@ import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { action, obj } from "@/lib/action";
-import { assertManager, assertProject, isDirector, UserError } from "@/lib/access";
+import { action, cuid, obj } from "@/lib/action";
+import { assertDirector, assertManager, assertProject, isDirector, projectScope, UserError } from "@/lib/access";
 import { hashPassword } from "@/lib/auth";
 import { logActivity, notify } from "@/lib/services";
 import { ROLE_LABEL } from "@/lib/utils";
@@ -34,4 +34,28 @@ export const createUser = action(async (u, fd) => {
   if (project) await notify(u.companyId, [person.id], { type: "PROJECT_ASSIGNED", title: "You were added to a project", body: project.name, href: "/site" });
   revalidatePath("/", "layout");
   return { message: `${person.name} can now sign in with ${person.email} and password ${password} — share it securely.` };
+});
+
+/** Managers issue a fresh temporary password (there is no email delivery in the MVP). Directors: anyone; PMs: supervisors on their projects. */
+export const resetPassword = action(async (u, fd) => {
+  assertManager(u);
+  const { userId } = z.object({ userId: cuid("Person") }).parse(obj(fd));
+  const target = await prisma.user.findFirst({ where: { id: userId, companyId: u.companyId } });
+  if (!target || target.id === u.id) throw new UserError("Person not found.");
+  if (!isDirector(u) && (target.role !== "SITE_SUPERVISOR" || !(await prisma.projectMember.findFirst({ where: { userId: target.id, project: projectScope(u) } }))))
+    throw new UserError("You can only reset passwords for supervisors on your projects.");
+  const password = `Zu-${randomBytes(4).toString("hex")}`;
+  await prisma.user.update({ where: { id: target.id }, data: { passwordHash: await hashPassword(password), tokenVersion: { increment: 1 }, failedLogins: 0, lockedUntil: null } });
+  return { message: `Temporary password for ${target.name}: ${password} — share it securely and ask them to change it under Profile.` };
+});
+
+export const setUserActive = action(async (u, fd) => {
+  assertDirector(u);
+  const d = z.object({ userId: cuid("Person"), active: z.enum(["true", "false"]) }).parse(obj(fd));
+  const target = await prisma.user.findFirst({ where: { id: d.userId, companyId: u.companyId } });
+  if (!target || target.id === u.id) throw new UserError("You can't change your own access.");
+  const active = d.active === "true";
+  await prisma.user.update({ where: { id: target.id }, data: { active, ...(active ? {} : { tokenVersion: { increment: 1 } }) } });
+  revalidatePath("/", "layout");
+  return { message: active ? `${target.name} can sign in again.` : `${target.name} was deactivated and signed out.` };
 });

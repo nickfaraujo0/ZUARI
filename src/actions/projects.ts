@@ -3,27 +3,29 @@ import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
-import { action, cuid, dateStr, obj } from "@/lib/action";
-import { assertDirector, assertManager, assertProject, UserError } from "@/lib/access";
+import { action, cuid, dateStr, obj, optId } from "@/lib/action";
+import { assertDirector, assertManager, assertProject, isDirector, UserError } from "@/lib/access";
 import { logActivity, nextProjectCode, notify, recomputeProgress } from "@/lib/services";
 import { parseDate } from "@/lib/utils";
 
 const refresh = () => revalidatePath("/", "layout");
 const DEFAULT_PHASES = ["Foundation", "Structure", "Masonry", "Electrical", "Plumbing", "Finishing"];
 
+const projectFields = z.object({
+  name: z.string().min(2, "Project name is required").max(100),
+  client: z.string().min(2, "Client is required").max(100),
+  location: z.string().min(2, "Location is required").max(100),
+  type: z.enum(["RESIDENTIAL", "COMMERCIAL", "HOSPITALITY", "INSTITUTIONAL", "OTHER"]),
+  startDate: dateStr("Start date"),
+  expectedEnd: dateStr("Expected completion"),
+  budget: z.coerce.number({ error: "Budget must be a number" }).min(0).max(1e12),
+  managerId: cuid("Project manager"),
+  description: z.string().max(1000).optional(),
+});
+
 export const createProject = action(async (u, fd) => {
   assertDirector(u);
-  const d = z.object({
-    name: z.string().min(2, "Project name is required").max(100),
-    client: z.string().min(2, "Client is required").max(100),
-    location: z.string().min(2, "Location is required").max(100),
-    type: z.enum(["RESIDENTIAL", "COMMERCIAL", "HOSPITALITY", "INSTITUTIONAL", "OTHER"]),
-    startDate: dateStr("Start date"),
-    expectedEnd: dateStr("Expected completion"),
-    budget: z.coerce.number({ error: "Budget must be a number" }).min(0).max(1e12),
-    managerId: cuid("Project manager"),
-    description: z.string().max(1000).optional(),
-  }).parse(obj(fd));
+  const d = projectFields.parse(obj(fd));
   const start = parseDate(d.startDate)!, end = parseDate(d.expectedEnd)!;
   if (end <= start) throw new UserError("Expected completion must be after the start date.");
   const manager = await prisma.user.findFirst({ where: { id: d.managerId, companyId: u.companyId, active: true, role: { not: "SITE_SUPERVISOR" } } });
@@ -119,4 +121,24 @@ export const deletePhase = action(async (u, fd) => {
   await prisma.projectPhase.delete({ where: { id: ph.id } });
   await recomputeProgress(ph.projectId);
   refresh();
+});
+
+export const updateProject = action(async (u, fd) => {
+  assertManager(u);
+  const d = projectFields.extend({ projectId: cuid("Project"), managerId: optId }).parse(obj(fd));
+  const p = await assertProject(u, d.projectId);
+  const start = parseDate(d.startDate)!, end = parseDate(d.expectedEnd)!;
+  if (end <= start) throw new UserError("Expected completion must be after the start date.");
+  let managerId = p.managerId;
+  if (isDirector(u) && d.managerId && d.managerId !== p.managerId) {
+    const m = await prisma.user.findFirst({ where: { id: d.managerId, companyId: u.companyId, active: true, role: { not: "SITE_SUPERVISOR" } } });
+    if (!m) throw new UserError("Choose a project manager or director from your company.");
+    managerId = m.id;
+    await prisma.projectMember.upsert({ where: { projectId_userId: { projectId: p.id, userId: m.id } }, update: {}, create: { companyId: u.companyId, projectId: p.id, userId: m.id } });
+    await notify(u.companyId, [m.id], { type: "PROJECT_ASSIGNED", title: "You now manage a project", body: d.name, href: `/projects/${p.id}` }, u.id);
+  }
+  await prisma.project.update({ where: { id: p.id }, data: { name: d.name, client: d.client, location: d.location, type: d.type, startDate: start, expectedEnd: end, budget: d.budget, description: d.description ?? null, managerId } });
+  await logActivity({ companyId: u.companyId, projectId: p.id, actorId: u.id, type: "PROJECT_UPDATED", message: `${u.name} updated the project details`, detail: d.name });
+  refresh();
+  redirect(`/projects/${p.id}`);
 });

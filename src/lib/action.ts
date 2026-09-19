@@ -15,6 +15,8 @@ export function action(fn: (u: SessionUser, fd: FormData) => Promise<Partial<Non
     } catch (e) {
       const digest = (e as { digest?: string })?.digest;
       if (typeof digest === "string" && digest.startsWith("NEXT_")) throw e;
+      // A racing duplicate of an idempotent submission (same clientId) counts as success.
+      if ((e as { code?: string })?.code === "P2002" && JSON.stringify((e as { meta?: unknown }).meta ?? "").includes("clientId")) return { ok: true, message: "Already received" };
       if (e instanceof UserError) return { error: e.message };
       if (e instanceof z.ZodError) return { error: e.issues[0]?.message ?? "Please check the form." };
       console.error("[action]", e);

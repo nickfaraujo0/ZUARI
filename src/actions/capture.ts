@@ -15,11 +15,13 @@ const plural = (n: number, s: string) => `${n} ${s}${n === 1 ? "" : "s"}`;
 /** ADD PROGRESS: photo(s) + task status + note → one ProgressUpdate, structured as project evidence. */
 export const submitProgress = action(async (u, fd) => {
   const d = z.object({
-    projectId: cuid("Project"), taskId: optId, note: z.string().max(2000).optional(),
+    projectId: cuid("Project"), clientId: z.string().max(64).optional(), taskId: optId, note: z.string().max(2000).optional(),
     status: z.enum(["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "VERIFIED"]).optional(),
     progress: z.coerce.number().int().min(0).max(100).optional(),
   }).parse(obj(fd));
   const project = await assertProject(u, d.projectId);
+  // Idempotency: an offline retry of an already-received submission is acknowledged, not duplicated.
+  if (d.clientId && (await prisma.progressUpdate.findFirst({ where: { companyId: u.companyId, clientId: d.clientId }, select: { id: true } }))) return { message: "Progress submitted" };
   const upload = files(fd);
 
   // Supervisors can only touch tasks assigned to them.
@@ -36,7 +38,7 @@ export const submitProgress = action(async (u, fd) => {
   await prisma.$transaction(async (tx) => {
     await tx.progressUpdate.create({
       data: {
-        companyId: u.companyId, projectId: project.id, taskId: task?.id, userId: u.id, note: d.note,
+        clientId: d.clientId, companyId: u.companyId, projectId: project.id, taskId: task?.id, userId: u.id, note: d.note,
         statusBefore: task?.status, statusAfter: change?.status, progress: change?.progress,
         photos: { create: stored.map((s) => ({ companyId: u.companyId, projectId: project.id, taskId: task?.id, userId: u.id, storageKey: s.key, mime: s.mime, size: s.size })) },
       },
@@ -59,13 +61,15 @@ export const submitProgress = action(async (u, fd) => {
 
 export const reportIssue = action(async (u, fd) => {
   const d = z.object({
-    projectId: cuid("Project"), taskId: optId, area: z.string().max(120).optional(),
+    projectId: cuid("Project"), clientId: z.string().max(64).optional(), taskId: optId, area: z.string().max(120).optional(),
     title: z.string().min(3, "Give the issue a short title").max(140),
     description: z.string().max(2000).optional(),
     severity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).default("MEDIUM"),
     assigneeId: optId, dueDate: optDate,
   }).parse(obj(fd));
   const project = await assertProject(u, d.projectId);
+  // Idempotency: an offline retry of an already-received submission is acknowledged, not duplicated.
+  if (d.clientId && (await prisma.issue.findFirst({ where: { companyId: u.companyId, clientId: d.clientId }, select: { id: true } }))) return { message: "Issue reported" };
   if (d.taskId && !(await prisma.task.findFirst({ where: { id: d.taskId, projectId: project.id, ...taskScope(u) } }))) throw new UserError("That task isn't available to you.");
   // Only managers may assign at creation time.
   const assignee = d.assigneeId && isManager(u) ? await prisma.user.findFirst({ where: { id: d.assigneeId, companyId: u.companyId, active: true } }) : null;
@@ -74,7 +78,7 @@ export const reportIssue = action(async (u, fd) => {
   await prisma.$transaction(async (tx) => {
     await tx.issue.create({
       data: {
-        companyId: u.companyId, projectId: project.id, taskId: d.taskId, area: d.area, title: d.title, description: d.description, severity: d.severity,
+        clientId: d.clientId, companyId: u.companyId, projectId: project.id, taskId: d.taskId, area: d.area, title: d.title, description: d.description, severity: d.severity,
         reporterId: u.id, assigneeId: assignee?.id, status: assignee ? "ASSIGNED" : "OPEN", dueDate: parseDate(d.dueDate),
         photos: { create: stored.map((s) => ({ companyId: u.companyId, projectId: project.id, taskId: d.taskId, userId: u.id, storageKey: s.key, mime: s.mime, size: s.size })) },
       },
@@ -89,17 +93,19 @@ export const reportIssue = action(async (u, fd) => {
 
 export const submitSiteUpdate = action(async (u, fd) => {
   const d = z.object({
-    projectId: cuid("Project"), workCompleted: z.string().max(2000).optional(), workPlanned: z.string().max(2000).optional(),
+    projectId: cuid("Project"), clientId: z.string().max(64).optional(), workCompleted: z.string().max(2000).optional(), workPlanned: z.string().max(2000).optional(),
     workforceCount: z.coerce.number().int().min(0).max(100000).default(0), materialsReceived: z.string().max(1000).optional(), notes: z.string().max(2000).optional(),
   }).parse(obj(fd));
   const project = await assertProject(u, d.projectId);
+  // Idempotency: an offline retry of an already-received submission is acknowledged, not duplicated.
+  if (d.clientId && (await prisma.siteReport.findFirst({ where: { companyId: u.companyId, clientId: d.clientId }, select: { id: true } }))) return { message: "Site update submitted" };
   const upload = files(fd);
   if (!d.workCompleted && !d.workPlanned && !d.workforceCount && !d.materialsReceived && !d.notes && !upload.length) throw new UserError("Add at least one detail to the site update.");
   const stored = await storeFiles(upload, u.companyId, project.id);
   await prisma.$transaction(async (tx) => {
     await tx.siteReport.create({
       data: {
-        companyId: u.companyId, projectId: project.id, userId: u.id, workCompleted: d.workCompleted, workPlanned: d.workPlanned, workforceCount: d.workforceCount, materialsReceived: d.materialsReceived, notes: d.notes,
+        clientId: d.clientId, companyId: u.companyId, projectId: project.id, userId: u.id, workCompleted: d.workCompleted, workPlanned: d.workPlanned, workforceCount: d.workforceCount, materialsReceived: d.materialsReceived, notes: d.notes,
         photos: { create: stored.map((s) => ({ companyId: u.companyId, projectId: project.id, userId: u.id, storageKey: s.key, mime: s.mime, size: s.size })) },
       },
     });

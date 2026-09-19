@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { AlertTriangle, Camera, CheckCircle2, ImagePlus, Loader2, Minus, Plus, WifiOff, X } from "lucide-react";
 import { reportIssue, submitProgress, submitSiteUpdate } from "@/actions/capture";
 import { cn } from "@/lib/utils";
+import { enqueue } from "@/lib/outbox";
 
 type Task = { id: string; title: string; status: string; progress: number };
 type Project = { id: string; name: string; tasks: Task[] };
@@ -37,7 +38,7 @@ async function compress(file: File): Promise<File> {
 const label = "mb-2 block text-xs font-medium uppercase tracking-[0.14em] text-muted";
 const field = "w-full rounded-xl border border-line bg-white px-4 text-base outline-none focus:border-river focus:ring-2 focus:ring-river/15";
 
-export function CaptureForm({ kind, projects, projectId, taskId }: { kind: Kind; projects: Project[]; projectId?: string; taskId?: string }) {
+export function CaptureForm({ kind, userId, projects, projectId, taskId }: { kind: Kind; userId: string; projects: Project[]; projectId?: string; taskId?: string }) {
   const cfg = CFG[kind];
   const draftKey = `zuari:draft:${kind}`;
   const initialProject = projects.find((p) => p.id === projectId) ?? projects.find((p) => p.tasks.some((t) => t.id === taskId)) ?? projects[0];
@@ -54,6 +55,8 @@ export function CaptureForm({ kind, projects, projectId, taskId }: { kind: Kind;
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState(false);
+  const [queued, setQueued] = useState(false);
+  const [clientId, setClientId] = useState(() => crypto.randomUUID());
   const [online, setOnline] = useState(true);
   const [, start] = useTransition();
   const cam = useRef<HTMLInputElement>(null), pick = useRef<HTMLInputElement>(null);
@@ -107,14 +110,27 @@ export function CaptureForm({ kind, projects, projectId, taskId }: { kind: Kind;
       fd.set("workforceCount", String(workers));
       for (const k of ["workCompleted", "workPlanned", "materialsReceived", "notes"]) fd.set(k, text[k] ?? "");
     }
+    fd.set("clientId", clientId);
     photos.forEach((p) => fd.append("photos", p.file));
+    const label = `${cfg.title} · ${kind === "issue" ? (text.title ?? "") : (task?.title ?? project?.name ?? "")}`.trim();
+    // No signal (or the request never got through): keep everything on the phone and upload later.
+    const queueIt = async () => {
+      try {
+        await enqueue({ id: clientId, userId, kind, label, fields: [...fd.entries()].filter((e): e is [string, string] => typeof e[1] === "string" && e[0] !== "clientId"), photos: photos.map((p) => p.file), createdAt: Date.now() });
+        try { localStorage.removeItem(draftKey); } catch {}
+        setQueued(true); setDone(true);
+      } catch { setError("Could not save this on your phone. Free some storage and try again."); }
+    };
     setBusy(true);
     start(async () => {
-      try {
-        const res = await cfg.act(null, fd);
-        if (res?.error) setError(res.error);
-        else { try { localStorage.removeItem(draftKey); } catch {} photos.forEach((p) => URL.revokeObjectURL(p.url)); setDone(true); }
-      } catch { setError("Couldn't reach ZUARI. Your details are saved on this phone — check your signal and try again."); }
+      if (!navigator.onLine) await queueIt();
+      else {
+        try {
+          const res = await cfg.act(null, fd);
+          if (res?.error) setError(res.error);
+          else { try { localStorage.removeItem(draftKey); } catch {} setDone(true); }
+        } catch { await queueIt(); }
+      }
       setBusy(false);
     });
   }
@@ -122,11 +138,11 @@ export function CaptureForm({ kind, projects, projectId, taskId }: { kind: Kind;
   if (done) return (
     <div className="flex min-h-[70dvh] flex-col items-center justify-center px-8 text-center">
       <CheckCircle2 className="size-20 text-emerald-600" strokeWidth={1.5} />
-      <h2 className="mt-5 font-serif text-4xl font-semibold text-river-deep">{cfg.ok}</h2>
-      <p className="mt-2 text-muted">Your manager can see it in the office right now.</p>
+      <h2 className="mt-5 font-serif text-4xl font-semibold text-river-deep">{queued ? "Saved on this phone" : cfg.ok}</h2>
+      <p className="mt-2 text-muted">{queued ? "It will upload automatically as soon as you have signal. You can keep working." : "Your manager can see it in the office right now."}</p>
       <div className="mt-8 w-full space-y-3">
         <Link href="/site" className="flex h-14 items-center justify-center rounded-2xl bg-river text-base font-semibold text-ivory">Back to Home</Link>
-        <button onClick={() => { setDone(false); setPhotos([]); setText({}); setWorkers(0); }} className="h-14 w-full rounded-2xl border border-line bg-white text-base font-semibold">Add another</button>
+        <button onClick={() => { photos.forEach((p) => URL.revokeObjectURL(p.url)); setDone(false); setQueued(false); setClientId(crypto.randomUUID()); setPhotos([]); setText({}); setWorkers(0); }} className="h-14 w-full rounded-2xl border border-line bg-white text-base font-semibold">Add another</button>
       </div>
     </div>
   );
@@ -175,7 +191,7 @@ export function CaptureForm({ kind, projects, projectId, taskId }: { kind: Kind;
 
   return (
     <form onSubmit={submit} className="space-y-6 p-5 pb-36">
-      {!online && <p className="flex items-center gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-200"><WifiOff className="size-4 shrink-0" />You&apos;re offline. Your details are saved on this phone — submit when the signal returns.</p>}
+      {!online && <p className="flex items-center gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-200"><WifiOff className="size-4 shrink-0" />You&apos;re offline. You can still submit: it is saved on this phone and uploads automatically when the signal returns.</p>}
       {projects.length === 0 && <p className="rounded-xl bg-white p-4 text-sm text-muted ring-1 ring-line">You&apos;re not on any active project yet.</p>}
 
       {kind === "progress" && (<>
@@ -223,8 +239,8 @@ export function CaptureForm({ kind, projects, projectId, taskId }: { kind: Kind;
       {error && <p role="alert" className="flex items-start gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800 ring-1 ring-red-200"><AlertTriangle className="mt-0.5 size-4 shrink-0" />{error}</p>}
 
       <div className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-[480px] border-t border-line bg-ivory/95 p-4 pb-[max(1rem,env(safe-area-inset-bottom))] backdrop-blur">
-        <button type="submit" disabled={busy || !online || !pid} className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-river text-base font-semibold text-ivory disabled:opacity-50">
-          {busy ? <><Loader2 className="size-5 animate-spin" />Uploading…</> : cfg.cta}
+        <button type="submit" disabled={busy || !pid} className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-river text-base font-semibold text-ivory disabled:opacity-50">
+          {busy ? <><Loader2 className="size-5 animate-spin" />{online ? "Uploading…" : "Saving…"}</> : online ? cfg.cta : "Save to send later"}
         </button>
       </div>
     </form>

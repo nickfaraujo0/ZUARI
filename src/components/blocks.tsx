@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Chip, Photo } from "./ui";
-import { HEALTH, HEALTH_TONE, relative, type Health, fmtDay, fmtTime, dayKey } from "@/lib/utils";
+import { HEALTH, HEALTH_TONE, relative, type Health, fmtDay, fmtShort, fmtTime, dayKey } from "@/lib/utils";
 
 export const HealthChip = ({ health }: { health: Health }) => <Chip tone={HEALTH_TONE[health]} dot>{HEALTH[health]}</Chip>;
 
@@ -36,7 +36,7 @@ export function PhotoTile({ p, showProject, className }: { p: Ph; showProject?: 
       <Photo id={p.id} className="aspect-[4/3] w-full transition duration-500 group-hover:scale-[1.03]" alt={p.task?.title ?? "Progress photo"} />
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2.5 pt-8 text-white">
         <p className="truncate text-xs font-medium">{p.task?.title ?? (showProject ? p.project?.name : "Site photo")}</p>
-        <p className="truncate text-[11px] text-white/75">{p.user.name} · {fmtDay(p.takenAt)}, {fmtTime(p.takenAt)}</p>
+        <p className="truncate text-[11px] text-white/75">{p.user.name} · {fmtShort(p.takenAt)}, {fmtTime(p.takenAt)}</p>
       </div>
     </a>
   );

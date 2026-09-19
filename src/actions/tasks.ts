@@ -3,7 +3,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { action, cuid, obj, optDate, optId } from "@/lib/action";
-import { assertManager, assertProject, UserError } from "@/lib/access";
+import { assertManager, assertProject, taskScope, UserError } from "@/lib/access";
 import { logActivity, notify, recomputeProgress } from "@/lib/services";
 import { taskData } from "@/lib/task";
 import { parseDate, TASK_STATUS } from "@/lib/utils";
@@ -101,4 +101,16 @@ export const deleteTask = action(async (u, fd) => {
   await prisma.task.delete({ where: { id: t.id } });
   await recomputeProgress(t.projectId);
   refresh();
+});
+
+export const addComment = action(async (u, fd) => {
+  const d = z.object({ taskId: cuid("Task"), body: z.string().min(1, "Write a comment first").max(1000) }).parse(obj(fd));
+  const t = await prisma.task.findFirst({ where: { id: d.taskId, ...taskScope(u) }, include: { project: { select: { managerId: true } }, assignee: { select: { id: true, role: true } } } });
+  if (!t) throw new UserError("Task not found.");
+  await prisma.taskComment.create({ data: { companyId: u.companyId, taskId: t.id, userId: u.id, body: d.body } });
+  const n = { type: "COMMENT", title: `${u.name} commented`, body: `${t.title}: ${d.body.slice(0, 80)}` };
+  await notify(u.companyId, [t.assignee?.id], { ...n, href: t.assignee?.role === "SITE_SUPERVISOR" ? `/site/tasks/${t.id}` : `/projects/${t.projectId}/tasks/${t.id}` }, u.id);
+  if (t.project.managerId !== t.assignee?.id) await notify(u.companyId, [t.project.managerId], { ...n, href: `/projects/${t.projectId}/tasks/${t.id}` }, u.id);
+  refresh();
+  return { message: "Comment added" };
 });

@@ -9,5 +9,5 @@ export default async function Page({ searchParams }: { searchParams: Promise<{ p
   const u = await requireUser();
   const sp = await searchParams;
   const projects = await captureOptions(u);
-  return (<><SiteHeader title="Add Progress" /><CaptureForm kind="progress" projects={projects} projectId={sp.project} taskId={sp.task} /></>);
+  return (<><SiteHeader title="Add Progress" /><CaptureForm userId={u.id} kind="progress" projects={projects} projectId={sp.project} taskId={sp.task} /></>);
 }

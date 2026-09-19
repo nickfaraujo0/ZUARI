@@ -4,6 +4,7 @@ import { Camera } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { taskScope } from "@/lib/access";
+import { TaskComments } from "@/components/comments";
 import { SiteHeader } from "@/components/site-ui";
 import { Chip, Photo, Progress } from "@/components/ui";
 import { dueLabel, fmtDate, fmtTime, PRIORITY, PRIORITY_TONE, TASK_STATUS, TASK_TONE } from "@/lib/utils";
@@ -15,6 +16,7 @@ export default async function SiteTask({ params }: { params: Promise<{ id: strin
   const t = await prisma.task.findFirst({ where: { id: (await params).id, ...taskScope(u) }, include: { project: { select: { name: true } }, phase: { select: { name: true } } } });
   if (!t) notFound();
   const updates = await prisma.progressUpdate.findMany({ where: { taskId: t.id, companyId: u.companyId }, include: { user: { select: { name: true } }, photos: { select: { id: true } } }, orderBy: { createdAt: "desc" }, take: 10 });
+  const comments = await prisma.taskComment.findMany({ where: { taskId: t.id, companyId: u.companyId }, include: { user: { select: { name: true } } }, orderBy: { createdAt: "asc" } });
   return (
     <>
       <SiteHeader title="Task" back="/site/tasks" />
@@ -43,6 +45,7 @@ export default async function SiteTask({ params }: { params: Promise<{ id: strin
             ))}</ul>
           </div>
         )}
+        <TaskComments taskId={t.id} comments={comments} mobile />
       </div>
     </>
   );

@@ -28,7 +28,7 @@ export default async function Timeline({ params }: { params: Promise<{ id: strin
         <div className="overflow-x-auto px-5 pb-5">
           <div className="min-w-[720px]">
             <div className="relative ml-40 h-7 border-b border-line text-[11px] text-muted">
-              {months.map((m, i) => <span key={i} className="absolute top-0 -translate-x-0 border-l border-line pl-1.5" style={{ left: at(Math.max(m.getTime(), min)) }}>{m.toLocaleDateString("en-IN", { month: "short", year: months.length > 12 ? "2-digit" : undefined, timeZone: "UTC" })}</span>)}
+              {months.filter((m, i) => { const nx = months[i + 1]; return !nx || (nx.getTime() - Math.max(m.getTime(), min)) / span > 0.04; }).map((m, i) => <span key={i} className="absolute top-0 -translate-x-0 border-l border-line pl-1.5" style={{ left: at(Math.max(m.getTime(), min)) }}>{m.toLocaleDateString("en-IN", { month: "short", year: months.length > 12 ? "2-digit" : undefined, timeZone: "UTC" })}</span>)}
             </div>
             <div className="relative">
               {today >= min && today <= max && <div className="absolute bottom-0 top-0 z-10 ml-40 w-px bg-laterite" style={{ left: `calc((100% - 10rem) * ${(today - min) / span})` }}><span className="absolute -top-0.5 -translate-x-1/2 rounded bg-laterite px-1 text-[9px] text-white">Today</span></div>}

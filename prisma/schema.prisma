@@ -79,16 +79,19 @@ model Company {
 }
 
 model User {
-  id           String   @id @default(cuid())
+  id           String    @id @default(cuid())
   companyId    String
-  email        String   @unique
+  email        String    @unique
   name         String
   passwordHash String
   role         Role
   title        String?
   phone        String?
-  active       Boolean  @default(true)
-  createdAt    DateTime @default(now())
+  active       Boolean   @default(true)
+  failedLogins Int       @default(0)
+  lockedUntil  DateTime?
+  tokenVersion Int       @default(0)
+  createdAt    DateTime  @default(now())
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
@@ -104,6 +107,7 @@ model User {
   siteReports     SiteReport[]
   notifications   Notification[]
   activity        ActivityLog[]
+  passwordResets  PasswordReset[]
 
   @@index([companyId])
 }
@@ -230,6 +234,7 @@ model TaskComment {
 model ProgressUpdate {
   id           String      @id @default(cuid())
   companyId    String
+  clientId     String?
   projectId    String
   taskId       String?
   userId       String
@@ -245,6 +250,7 @@ model ProgressUpdate {
   photos  ProgressPhoto[]
   company Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  @@unique([companyId, clientId])
   @@index([projectId, createdAt])
   @@index([companyId])
 }
@@ -280,6 +286,7 @@ model ProgressPhoto {
 model Issue {
   id          String      @id @default(cuid())
   companyId   String
+  clientId    String?
   projectId   String
   taskId      String?
   area        String?
@@ -300,6 +307,7 @@ model Issue {
   photos   ProgressPhoto[]
   company  Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  @@unique([companyId, clientId])
   @@index([projectId, status])
   @@index([companyId])
 }
@@ -307,6 +315,7 @@ model Issue {
 model SiteReport {
   id                String   @id @default(cuid())
   companyId         String
+  clientId          String?
   projectId         String
   userId            String
   date              DateTime @default(now())
@@ -322,6 +331,7 @@ model SiteReport {
   photos  ProgressPhoto[]
   company Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
+  @@unique([companyId, clientId])
   @@index([projectId, date])
   @@index([companyId])
 }
@@ -362,4 +372,18 @@ model ActivityLog {
 
   @@index([projectId, createdAt])
   @@index([companyId, createdAt])
+}
+
+// Single-use, hashed, expiring password-reset tokens (self-service "forgot password").
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
 }

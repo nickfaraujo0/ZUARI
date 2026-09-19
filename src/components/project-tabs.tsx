@@ -20,6 +20,7 @@ export function ProjectTabs({ id, counts }: { id: string; counts: { tasks: numbe
           </Link>
         );
       })}
+      <span className="flex items-center gap-1.5 whitespace-nowrap px-4 py-3 text-sm text-muted/60" title="Coming soon">Documents<span className="rounded bg-stone-200/70 px-1.5 py-px text-[9px] uppercase tracking-wider">Soon</span></span>
     </nav>
   );
 }

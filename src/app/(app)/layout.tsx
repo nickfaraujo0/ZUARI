@@ -4,7 +4,7 @@ import { Bell, Menu, Search } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { syncOverdueNotifications } from "@/lib/services";
-import { logout } from "@/actions/auth";
+import { SignOut } from "@/components/signout";
 import { Avatar, Logo } from "@/components/ui";
 import { NavLinks } from "@/components/nav";
 import { ROLE_LABEL } from "@/lib/utils";
@@ -42,7 +42,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </summary>
             <div className="absolute right-0 top-12 w-56 rounded-xl border border-line bg-white p-2 shadow-xl">
               <p className="truncate px-3 py-2 text-xs text-muted">{u.email}</p>
-              <form action={logout}><button className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-stone-100">Sign out</button></form>
+              <Link href="/profile" className="block rounded-lg px-3 py-2 text-sm hover:bg-stone-100">Profile &amp; password</Link>
+              <SignOut className="w-full rounded-lg px-3 py-2 text-left text-sm hover:bg-stone-100">Sign out</SignOut>
             </div>
           </details>
         </div>

@@ -17,9 +17,9 @@ const key = () => {
 export const hashPassword = (p: string) => bcrypt.hash(p, 11);
 export const verifyPassword = (p: string, h: string) => bcrypt.compare(p, h);
 
-export async function createSession(userId: string) {
-  const token = await new SignJWT({}).setProtectedHeader({ alg: "HS256" }).setSubject(userId).setIssuedAt().setExpirationTime(`${MAX_AGE}s`).sign(key());
-  (await cookies()).set(COOKIE, token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production", path: "/", maxAge: MAX_AGE });
+export async function createSession(userId: string, version = 0) {
+  const token = await new SignJWT({ v: version }).setProtectedHeader({ alg: "HS256" }).setSubject(userId).setIssuedAt().setExpirationTime(`${MAX_AGE}s`).sign(key());
+  (await cookies()).set(COOKIE, token, { httpOnly: true, sameSite: "lax", secure: process.env.NODE_ENV === "production" && process.env.AUTH_INSECURE_COOKIES !== "1", path: "/", maxAge: MAX_AGE });
 }
 export async function destroySession() {
   (await cookies()).delete(COOKIE);
@@ -33,7 +33,7 @@ export const getUser = cache(async () => {
     const { payload } = await jwtVerify(token, key(), { algorithms: ["HS256"] });
     if (!payload.sub) return null;
     const user = await prisma.user.findUnique({ where: { id: payload.sub }, include: { company: true } });
-    return user && user.active ? user : null;
+    return user && user.active && (payload.v ?? -1) === user.tokenVersion ? user : null;
   } catch {
     return null;
   }
