@@ -8,6 +8,7 @@ import { ActivityFeed, PhotoTile } from "@/components/blocks";
 import { WeatherCard } from "@/components/weather-card";
 import { SharePanel } from "@/components/share-panel";
 import { insightsFor } from "@/lib/insights";
+import { siteEquipment } from "@/lib/inventory";
 import { forecast, tasksAtRisk } from "@/lib/weather";
 import { Avatar, Card, CardHead, Chip, LinkButton, Progress, Stat } from "@/components/ui";
 import { dueLabel, formatINR, fmtDate, opts, PROJECT_STATUS, PRIORITY, PRIORITY_TONE, startOfToday, TASK_STATUS, TASK_TONE } from "@/lib/utils";
@@ -26,6 +27,7 @@ export default async function Overview({ params }: { params: Promise<{ id: strin
   ]);
   const shares = isManager(u) ? await prisma.clientShare.findMany({ where: { projectId: p.id, companyId: u.companyId, revokedAt: null }, orderBy: { createdAt: "desc" } }) : [];
   const insight = isManager(u) || u.role === "ACCOUNTANT" ? (await insightsFor(u)).find((i) => i.projectId === p.id) : undefined;
+  const equip = isManager(u) || u.role === "ACCOUNTANT" ? await siteEquipment(u.companyId, p.id) : [];
   const days = p.latitude != null && p.longitude != null ? await forecast(p.latitude, p.longitude) : null;
   const risks = days ? tasksAtRisk(await prisma.task.findMany({ where: { projectId: p.id, weatherSensitive: true, status: { in: ["NOT_STARTED", "IN_PROGRESS"] } }, select: { id: true, title: true, startDate: true, dueDate: true, weatherSensitive: true, status: true } }), days) : [];
   const left = Math.ceil((p.expectedEnd.getTime() - startOfToday().getTime()) / 864e5);
@@ -72,6 +74,12 @@ export default async function Overview({ params }: { params: Promise<{ id: strin
               </ul>
             )}
           </Card>
+          {equip.length > 0 && (
+            <Card>
+              <CardHead title="Equipment on site" action={<Link href={`/inventory/at/p-${p.id}`} className="text-xs font-medium text-river hover:underline">All equipment</Link>} />
+              <ul className="grid gap-x-6 border-t border-line/70 px-5 py-3 sm:grid-cols-2">{equip.map((e) => <li key={e.id} className="flex justify-between py-1 text-sm"><span>{e.name}</span><b className="tabular-nums">{e.qty} <span className="text-xs font-normal text-muted">{e.unit}</span></b></li>)}</ul>
+            </Card>
+          )}
           {photos.length > 0 && (
             <Card>
               <CardHead title="Latest photos" action={<Link href={`/projects/${p.id}/photos`} className="text-xs font-medium text-river hover:underline">Open gallery</Link>} />

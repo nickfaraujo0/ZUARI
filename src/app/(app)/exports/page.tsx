@@ -8,7 +8,7 @@ import { Card, CardHead, Field, inputCls, PageHeader, Select } from "@/component
 import { addDays, startOfToday, toInputDate } from "@/lib/utils";
 
 export const metadata = { title: "Export & import" };
-const CSV = [["tasks", "Tasks", "m"], ["issues", "Issues", "m"], ["attendance", "Attendance (last 30 days)", "m"], ["stock", "Stock by project", "m"], ["workers", "Workers", "m"], ["contractors", "Contractors", "b"], ["suppliers", "Suppliers", "b"], ["bills", "Contractor bills", "b"], ["expenses", "Expenses", "f"]] as const;
+const CSV = [["tasks", "Tasks", "m"], ["issues", "Issues", "m"], ["attendance", "Attendance (last 30 days)", "m"], ["stock", "Stock by project", "m"], ["workers", "Workers", "m"], ["inventory", "Inventory by location", "b"], ["inventory-transfers", "Equipment transfer log", "b"], ["contractors", "Contractors", "b"], ["suppliers", "Suppliers", "b"], ["bills", "Contractor bills", "b"], ["expenses", "Expenses", "f"]] as const;
 
 export default async function Exports() {
   const u = await requireUser();

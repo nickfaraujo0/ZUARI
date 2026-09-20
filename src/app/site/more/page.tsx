@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bell, ChevronRight, ClipboardCheck, Clock, FileText, ShieldCheck, LayoutDashboard, LogOut, Package, UserRound, Users } from "lucide-react";
+import { Bell, ChevronRight, Boxes, ClipboardCheck, Clock, FileText, ShieldCheck, LayoutDashboard, LogOut, Package, UserRound, Users } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { projectScope } from "@/lib/access";
@@ -33,6 +33,7 @@ export default async function More() {
           {u.role !== "CONTRACTOR" && <Link href="/site/inspections" className={row}><ClipboardCheck className="size-5 text-river" />{tr("Inspections")}<ChevronRight className="ml-auto size-5 text-muted" /></Link>}
           <Link href="/site/safety" className={row}><ShieldCheck className="size-5 text-river" />{tr("Safety")}<ChevronRight className="ml-auto size-5 text-muted" /></Link>
           <Link href="/site/delay" className={row}><Clock className="size-5 text-river" />{tr("Log a delay")}<ChevronRight className="ml-auto size-5 text-muted" /></Link>
+          {u.role !== "CONTRACTOR" && <Link href="/site/inventory" className={row}><Boxes className="size-5 text-river" />{tr("Tools & equipment")}<ChevronRight className="ml-auto size-5 text-muted" /></Link>}
           <Link href="/site/drawings" className={row}><FileText className="size-5 text-river" />{tr("Drawings & documents")}<ChevronRight className="ml-auto size-5 text-muted" /></Link>
           {!isSiteRole(u.role) && <Link href="/dashboard" className={row}><LayoutDashboard className="size-5 text-river" />{tr("Open Command Center")}<ChevronRight className="ml-auto size-5 text-muted" /></Link>}
         </div>

@@ -8,6 +8,7 @@ import { logActivity, notify, recomputeProgress } from "../src/lib/services";
 import { seedPhase2 } from "./seed-phase2";
 import { phoneKey } from "../src/lib/phone";
 import { seedPhase3, DEMO_SHARE_TOKEN } from "./seed-phase3";
+import { seedInventory } from "./seed-inventory";
 
 const prisma = new PrismaClient();
 const PASSWORD = "zuari-demo-2026";
@@ -164,6 +165,7 @@ async function main() {
 
   await seedPhase2({ prisma, co: co.id, U, day, at, IST });
   await seedPhase3({ prisma, co: co.id, U, day, at });
+  await seedInventory({ prisma, co: co.id, U, day, at });
 
   // Second tenant — proves isolation.
   const kb = await prisma.company.create({ data: { name: "Konkan Builders" } });

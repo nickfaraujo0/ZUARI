@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FolderKanban, ListChecks, TriangleAlert, Images, Users, HardHat, Package, Truck, Wallet, Receipt, FileText, BarChart3, Settings, Smartphone, CalendarDays, MapPin, GanttChartSquare, Building2, Store, Banknote, FileBarChart, Ruler, ClipboardCheck, ShieldCheck, ReceiptText, ArrowDownUp, Sparkles } from "lucide-react";
+import { LayoutDashboard, FolderKanban, ListChecks, TriangleAlert, Images, Users, HardHat, Package, Truck, Wallet, Receipt, FileText, BarChart3, Settings, Smartphone, CalendarDays, MapPin, GanttChartSquare, Building2, Store, Banknote, FileBarChart, Ruler, ClipboardCheck, ShieldCheck, ReceiptText, ArrowDownUp, Sparkles, Boxes } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Role = "DIRECTOR" | "PROJECT_MANAGER" | "ACCOUNTANT";
@@ -10,7 +10,7 @@ const MGR: Role[] = ["DIRECTOR", "PROJECT_MANAGER"], FIN: Role[] = ["DIRECTOR", 
 const GROUPS: { label: string; items: Item[] }[] = [
   { label: "", items: [{ href: "/dashboard", label: "Overview", icon: LayoutDashboard }] },
   { label: "Projects", items: [{ href: "/projects", label: "All Projects", icon: FolderKanban }, { href: "/timeline", label: "Timeline", icon: GanttChartSquare }, { href: "/calendar", label: "Calendar", icon: CalendarDays }, { href: "/map", label: "Map", icon: MapPin }] },
-  { label: "Operations", items: [{ href: "/tasks", label: "Tasks", icon: ListChecks, roles: MGR }, { href: "/workforce", label: "Workforce", icon: HardHat, roles: MGR }, { href: "/contractors", label: "Contractors", icon: Building2 }, { href: "/materials", label: "Materials", icon: Package, roles: MGR }, { href: "/procurement", label: "Procurement", icon: Truck }, { href: "/suppliers", label: "Suppliers", icon: Store }] },
+  { label: "Operations", items: [{ href: "/tasks", label: "Tasks", icon: ListChecks, roles: MGR }, { href: "/workforce", label: "Workforce", icon: HardHat, roles: MGR }, { href: "/contractors", label: "Contractors", icon: Building2 }, { href: "/materials", label: "Materials", icon: Package, roles: MGR }, { href: "/inventory", label: "Inventory", icon: Boxes }, { href: "/procurement", label: "Procurement", icon: Truck }, { href: "/suppliers", label: "Suppliers", icon: Store }] },
   { label: "Finance", items: [{ href: "/bills", label: "Contractor bills", icon: ReceiptText },
   { href: "/budget", label: "Budget", icon: Wallet, roles: FIN }, { href: "/expenses", label: "Expenses", icon: Receipt, roles: FIN }, { href: "/payments", label: "Payments", icon: Banknote, roles: FIN }] },
   { label: "Site", items: [{ href: "/photos", label: "Progress Photos", icon: Images, roles: MGR }, { href: "/inspections", label: "Inspections", icon: ClipboardCheck, roles: MGR }, { href: "/safety", label: "Safety", icon: ShieldCheck, roles: MGR }, { href: "/issues", label: "Issues", icon: TriangleAlert, roles: MGR }] },
