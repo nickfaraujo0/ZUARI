@@ -3,7 +3,7 @@ import { ActionForm } from "./forms";
 import { Field, inputCls, Select } from "./ui";
 import { opts, toInputDate, TYPE_LABEL } from "@/lib/utils";
 
-type P = { id: string; name: string; client: string; location: string; type: string; startDate: Date; expectedEnd: Date; budget: number; managerId: string | null; description: string | null };
+type P = { latitude?: number | null; longitude?: number | null; id: string; name: string; client: string; location: string; type: string; startDate: Date; expectedEnd: Date; budget: number; managerId: string | null; description: string | null };
 export function ProjectForm({ managers, project, canPickManager, defaults }: { managers: { id: string; name: string; role: string }[]; project?: P; canPickManager: boolean; defaults: { start: string; end: string; managerId: string } }) {
   return (
     <ActionForm action={project ? updateProject : createProject} submit={project ? "Save changes" : "Create project"} className="grid gap-4 sm:grid-cols-2">
@@ -18,6 +18,8 @@ export function ProjectForm({ managers, project, canPickManager, defaults }: { m
       {canPickManager ? (
         <Field label="Project manager" className="sm:col-span-2"><Select name="managerId" required defaultValue={project?.managerId ?? defaults.managerId} options={managers.map((m) => ({ value: m.id, label: `${m.name} · ${m.role === "DIRECTOR" ? "Director" : "Project Manager"}` }))} /></Field>
       ) : project && <p className="text-xs text-muted sm:col-span-2">Only a director can change the project manager.</p>}
+      <Field label="Latitude (optional)" hint="For the project map"><input name="latitude" type="number" step="any" min={-90} max={90} defaultValue={project?.latitude ?? ""} className={inputCls} placeholder="15.4569" /></Field>
+      <Field label="Longitude (optional)"><input name="longitude" type="number" step="any" min={-180} max={180} defaultValue={project?.longitude ?? ""} className={inputCls} placeholder="73.8025" /></Field>
       <Field label="Description" className="sm:col-span-2"><textarea name="description" rows={3} defaultValue={project?.description ?? ""} className={`${inputCls} h-auto py-2`} placeholder="Scope, site notes, key constraints…" /></Field>
     </ActionForm>
   );

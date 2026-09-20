@@ -14,9 +14,11 @@
   },
   "dependencies": {
     "@prisma/client": "^6.19.3",
+    "@types/leaflet": "^1.9.22",
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "jose": "^6.2.12",
+    "leaflet": "^1.9.4",
     "lucide-react": "^1.47.0",
     "next": "16.3.5",
     "prisma": "^6.19.3",
@@ -24,6 +26,7 @@
     "react-dom": "19.2.8",
     "server-only": "^0.0.1",
     "tailwind-merge": "^3.7.0",
+    "web-push": "^3.6.7",
     "zod": "^4.6.5"
   },
   "devDependencies": {
@@ -32,6 +35,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/web-push": "^3.6.4",
     "eslint": "^9",
     "eslint-config-next": "16.3.5",
     "playwright": "^1.63.0",

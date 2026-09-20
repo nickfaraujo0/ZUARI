@@ -5,6 +5,8 @@ import { createPhase, deletePhase, updatePhase } from "@/actions/projects";
 import { ActionForm, ConfirmSubmit } from "@/components/forms";
 import { Card, CardHead, Field, inputCls } from "@/components/ui";
 import { fmtDate, fmtShort, startOfToday, toInputDate } from "@/lib/utils";
+import { DelayLogCard } from "@/components/delay-log";
+import { forecast, HEAVY_MM } from "@/lib/weather";
 
 export const metadata = { title: "Timeline" };
 const DAY = 864e5;
@@ -13,6 +15,9 @@ export default async function Timeline({ params }: { params: Promise<{ id: strin
   const u = await requireUser();
   const p = await requireProject(u, (await params).id);
   const phases = await prisma.projectPhase.findMany({ where: { projectId: p.id }, orderBy: { position: "asc" }, include: { _count: { select: { tasks: true } } } });
+  const [delays, days] = await Promise.all([prisma.delayLog.findMany({ where: { projectId: p.id, companyId: u.companyId }, include: { phase: { select: { name: true } } }, orderBy: { date: "desc" }, take: 60 }), p.latitude != null && p.longitude != null ? forecast(p.latitude, p.longitude) : null]);
+  const logged = new Set(delays.filter((x) => x.cause === "WEATHER").map((x) => toInputDate(x.date)));
+  const suggestions = (days ?? []).filter((x) => x.past && x.rain >= HEAVY_MM && !logged.has(x.date));
   const min = Math.min(p.startDate.getTime(), ...phases.map((x) => x.startDate.getTime()));
   const max = Math.max(p.expectedEnd.getTime(), ...phases.map((x) => x.endDate.getTime()));
   const span = Math.max(max - min, DAY);
@@ -76,6 +81,7 @@ export default async function Timeline({ params }: { params: Promise<{ id: strin
           </div>
         </Card>
       )}
+      <DelayLogCard projectId={p.id} delays={delays} phases={phases.map((x) => ({ id: x.id, name: x.name }))} suggestions={suggestions} canManage={canEdit} />
     </div>
   );
 }

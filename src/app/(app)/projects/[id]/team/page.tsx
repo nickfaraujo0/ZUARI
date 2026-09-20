@@ -12,10 +12,11 @@ export const metadata = { title: "Team" };
 export default async function TeamTab({ params }: { params: Promise<{ id: string }> }) {
   const u = await requireUser();
   const p = await requireProject(u, (await params).id);
-  const [members, others, taskCounts] = await Promise.all([
+  const [members, others, taskCounts, contractors] = await Promise.all([
     prisma.projectMember.findMany({ where: { projectId: p.id, companyId: u.companyId }, include: { user: true }, orderBy: { addedAt: "asc" } }),
     prisma.user.findMany({ where: { companyId: u.companyId, active: true, memberships: { none: { projectId: p.id } } }, orderBy: { name: "asc" } }),
     prisma.task.groupBy({ by: ["assigneeId"], where: { projectId: p.id, status: { in: ["NOT_STARTED", "IN_PROGRESS"] } }, _count: true }),
+    prisma.contractor.findMany({ where: { companyId: u.companyId, active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
   ]);
   const canManage = isManager(u);
   return (
@@ -46,7 +47,7 @@ export default async function TeamTab({ params }: { params: Promise<{ id: string
               </ActionForm>
             </Card>
           )}
-          <Card className="p-5"><h2 className="mb-1 text-[15px] font-semibold">Add someone new</h2><p className="mb-4 text-xs text-muted">Creates their account and adds them to this project.</p><NewUserForm projectId={p.id} director={isDirector(u)} /></Card>
+          <Card className="p-5"><h2 className="mb-1 text-[15px] font-semibold">Add someone new</h2><p className="mb-4 text-xs text-muted">Creates their account and adds them to this project.</p><NewUserForm projectId={p.id} director={isDirector(u)} contractors={contractors} /></Card>
         </div>
       )}
     </div>

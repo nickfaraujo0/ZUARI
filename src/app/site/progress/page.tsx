@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Camera, Images } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { projectScope } from "@/lib/access";
+import { photoScope } from "@/lib/access";
 import { SiteHeader } from "@/components/site-ui";
 import { Photo } from "@/components/ui";
 import { dayKey, fmtDay, fmtTime } from "@/lib/utils";
@@ -11,7 +11,7 @@ export const metadata = { title: "Progress" };
 
 export default async function SiteProgress() {
   const u = await requireUser();
-  const photos = await prisma.progressPhoto.findMany({ where: { companyId: u.companyId, project: projectScope(u) }, include: { task: { select: { title: true } }, user: { select: { name: true } }, project: { select: { name: true } } }, orderBy: { takenAt: "desc" }, take: 60 });
+  const photos = await prisma.progressPhoto.findMany({ where: photoScope(u), include: { task: { select: { title: true } }, user: { select: { name: true } }, project: { select: { name: true } } }, orderBy: { takenAt: "desc" }, take: 60 });
   const days = new Map<string, typeof photos>();
   for (const p of photos) days.set(dayKey(p.takenAt), [...(days.get(dayKey(p.takenAt)) ?? []), p]);
   return (
@@ -25,7 +25,7 @@ export default async function SiteProgress() {
             <div className="space-y-4">{list.map((p) => (
               <figure key={p.id} className="overflow-hidden rounded-2xl border border-line bg-white shadow-card">
                 <Photo id={p.id} className="aspect-[4/3] w-full" alt={p.task?.title ?? "Progress photo"} />
-                <figcaption className="p-3.5"><p className="font-semibold">{p.task?.title ?? p.project.name}</p><p className="text-sm text-muted">{p.user.name} · {fmtTime(p.takenAt)}</p></figcaption>
+                <figcaption className="p-3.5"><p className="font-semibold">{p.task?.title ?? p.project.name}</p><p className="text-sm text-muted">{p.user.name} · {fmtTime(p.takenAt)}</p>{[p.block, p.floor, p.locationArea].some(Boolean) && <p className="text-sm text-river">{[p.block, p.floor, p.locationArea].filter(Boolean).join(" · ")}</p>}</figcaption>
               </figure>
             ))}</div>
           </section>

@@ -4,27 +4,31 @@ import { Bell, Menu, Search } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { syncOverdueNotifications } from "@/lib/services";
+import { maybeEscalate } from "@/lib/schedules";
+import { isManager } from "@/lib/access";
 import { SignOut } from "@/components/signout";
 import { Avatar, Logo } from "@/components/ui";
 import { NavLinks } from "@/components/nav";
 import { ROLE_LABEL } from "@/lib/utils";
+import { isSiteRole } from "@/lib/roles";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const u = await requireUser();
-  if (u.role === "SITE_SUPERVISOR") redirect("/site"); // supervisors use ZUARI Site
+  if (isSiteRole(u.role)) redirect("/site"); // site roles use ZUARI Site
   await syncOverdueNotifications(u);
+  if (isManager(u)) await maybeEscalate(u.companyId);
   const unread = await prisma.notification.count({ where: { userId: u.id, readAt: null } });
   return (
-    <div className="min-h-dvh lg:pl-64">
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col overflow-y-auto bg-river-deep px-3 py-6 lg:flex">
+    <div className="min-h-dvh lg:pl-64 print:pl-0">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden print:!hidden w-64 flex-col overflow-y-auto bg-river-deep px-3 py-6 lg:flex">
         <Link href="/dashboard" className="mb-8 px-3"><Logo dark size={30} /></Link>
-        <NavLinks />
+        <NavLinks role={u.role} />
         <p className="mt-auto px-3 pt-8 text-[10px] uppercase tracking-[0.2em] text-ivory/35">{u.company.name}</p>
       </aside>
-      <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-line bg-ivory/90 px-4 backdrop-blur lg:px-8">
+      <header className="sticky top-0 z-20 print:hidden flex h-16 items-center gap-3 border-b border-line bg-ivory/90 px-4 backdrop-blur lg:px-8">
         <details className="relative lg:hidden">
           <summary className="flex size-9 cursor-pointer list-none items-center justify-center rounded-lg border border-line bg-white" aria-label="Menu"><Menu className="size-4" /></summary>
-          <div className="absolute left-0 top-11 max-h-[80dvh] w-64 overflow-y-auto rounded-xl bg-river-deep p-3 shadow-xl"><NavLinks /></div>
+          <div className="absolute left-0 top-11 max-h-[80dvh] w-64 overflow-y-auto rounded-xl bg-river-deep p-3 shadow-xl"><NavLinks role={u.role} /></div>
         </details>
         <form action="/search" className="relative max-w-md flex-1">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
@@ -48,7 +52,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </details>
         </div>
       </header>
-      <main className="mx-auto max-w-[1400px] px-4 py-8 lg:px-8">{children}</main>
+      <main className="mx-auto max-w-[1400px] px-4 py-8 lg:px-8 print:max-w-none print:p-0">{children}</main>
     </div>
   );
 }

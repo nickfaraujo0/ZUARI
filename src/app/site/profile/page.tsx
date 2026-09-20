@@ -6,5 +6,5 @@ export const metadata = { title: "Profile" };
 
 export default async function SiteProfile() {
   const u = await requireUser();
-  return <><SiteHeader title="Profile" back="/site/more" /><div className="p-5"><ProfileForms user={u} mobile /></div></>;
+  return <><SiteHeader title="Profile" back="/site/more" /><div className="p-5"><ProfileForms user={u} mobile vapidKey={process.env.VAPID_PUBLIC_KEY ?? null} /></div></>;
 }

@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { Chip, Photo } from "./ui";
+import { ActionForm } from "./forms";
+import { toggleClientVisible } from "@/actions/share";
 import { HEALTH, HEALTH_TONE, relative, type Health, fmtDay, fmtShort, fmtTime, dayKey } from "@/lib/utils";
 
 export const HealthChip = ({ health }: { health: Health }) => <Chip tone={HEALTH_TONE[health]} dot>{HEALTH[health]}</Chip>;
@@ -29,7 +31,7 @@ export function ActivityFeed({ items, showProject, empty = "No activity yet." }:
   );
 }
 
-type Ph = { id: string; takenAt: Date; caption?: string | null; issueId?: string | null; siteReportId?: string | null; task?: { title: string; phase?: { name: string } | null } | null; user: { name: string }; project?: { name: string } };
+type Ph = { clientVisible?: boolean; block?: string | null; floor?: string | null; locationArea?: string | null; id: string; takenAt: Date; caption?: string | null; issueId?: string | null; siteReportId?: string | null; task?: { title: string; phase?: { name: string } | null } | null; user: { name: string }; project?: { name: string } };
 export function PhotoTile({ p, showProject, className }: { p: Ph; showProject?: boolean; className?: string }) {
   return (
     <a href={`/api/photos/${p.id}`} target="_blank" rel="noreferrer" className={`group relative block overflow-hidden rounded-lg ${className ?? ""}`}>
@@ -37,13 +39,14 @@ export function PhotoTile({ p, showProject, className }: { p: Ph; showProject?: 
       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent p-2.5 pt-8 text-white">
         <p className="truncate text-xs font-medium">{p.task?.title ?? (showProject ? p.project?.name : "Site photo")}</p>
         <p className="truncate text-[11px] text-white/75">{p.user.name} · {fmtShort(p.takenAt)}, {fmtTime(p.takenAt)}</p>
+        {[p.block, p.floor, p.locationArea].some(Boolean) && <p className="truncate text-[11px] text-white/90">{[p.block, p.floor, p.locationArea].filter(Boolean).join(" · ")}</p>}
       </div>
     </a>
   );
 }
 
 /** Photos grouped by day, then by task/activity — the visual construction journal. */
-export function GroupedGallery({ photos, showProject, groupBy = "task" }: { photos: Ph[]; showProject?: boolean; groupBy?: "task" | "phase" }) {
+export function GroupedGallery({ photos, showProject, groupBy = "task", shareToggle }: { photos: Ph[]; showProject?: boolean; groupBy?: "task" | "phase"; shareToggle?: boolean }) {
   const days = new Map<string, Map<string, Ph[]>>();
   for (const p of photos) {
     const d = dayKey(p.takenAt), act = (groupBy === "phase" ? p.task?.phase?.name : p.task?.title) ?? (p.issueId ? "Reported issues" : p.siteReportId ? "Site updates" : "General site photos");
@@ -60,7 +63,7 @@ export function GroupedGallery({ photos, showProject, groupBy = "task" }: { phot
             {[...acts.entries()].map(([act, list]) => (
               <div key={act}>
                 <p className="mb-2 text-sm font-semibold">{act} <span className="font-normal text-muted">· {list.length}</span></p>
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">{list.map((p) => <PhotoTile key={p.id} p={p} showProject={showProject} />)}</div>
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">{list.map((p) => <div key={p.id} className="relative"><PhotoTile p={p} showProject={showProject} />{shareToggle && <ActionForm action={toggleClientVisible} hideSubmit className="absolute right-2 top-2 z-10"><input type="hidden" name="photoId" value={p.id} /><button title="Show this photo on the client page" className={`rounded-full px-2.5 py-1 text-[11px] font-medium shadow ${p.clientVisible ? "bg-emerald-600 text-white" : "bg-white/90 text-charcoal"}`}>{p.clientVisible ? "Shared ✓" : "Share"}</button></ActionForm>}</div>)}</div>
               </div>
             ))}
           </div>

@@ -45,7 +45,7 @@ export const greeting = () => {
 };
 
 // ── Labels & chip tones ────────────────────────────────────────
-export const ROLE_LABEL = { DIRECTOR: "Director", PROJECT_MANAGER: "Project Manager", SITE_SUPERVISOR: "Site Supervisor" } as const;
+export const ROLE_LABEL = { DIRECTOR: "Director", PROJECT_MANAGER: "Project Manager", ACCOUNTANT: "Accountant", SITE_ENGINEER: "Site Engineer", SITE_SUPERVISOR: "Site Supervisor", CONTRACTOR: "Contractor" } as const;
 export const TYPE_LABEL = { RESIDENTIAL: "Residential", COMMERCIAL: "Commercial", HOSPITALITY: "Hospitality", INSTITUTIONAL: "Institutional", OTHER: "Other" } as const;
 export const TASK_STATUS = { NOT_STARTED: "Not Started", IN_PROGRESS: "In Progress", COMPLETED: "Completed", VERIFIED: "Verified" } as const;
 export const PRIORITY = { LOW: "Low", MEDIUM: "Medium", HIGH: "High", URGENT: "Urgent" } as const;
@@ -62,3 +62,23 @@ export const PRIORITY_TONE: Record<string, Tone> = { LOW: "grey", MEDIUM: "sand"
 export const SEVERITY_TONE: Record<string, Tone> = { LOW: "grey", MEDIUM: "sand", HIGH: "amber", CRITICAL: "red" };
 export const ISSUE_TONE: Record<string, Tone> = { OPEN: "red", ASSIGNED: "amber", IN_PROGRESS: "teal", RESOLVED: "green", CLOSED: "grey" };
 export const opts = (m: Record<string, string>) => Object.entries(m).map(([value, label]) => ({ value, label }));
+
+// ── Phase 2 labels ─────────────────────────────────────────────
+export const ATTENDANCE = { PRESENT: "Present", HALF: "Half day", ABSENT: "Absent" } as const;
+export const TXN = { RECEIVED: "Received", CONSUMED: "Consumed", ADJUSTMENT: "Adjustment" } as const;
+export const REQUEST_STATUS = { REQUESTED: "Requested", APPROVED: "Approved", ORDERED: "Ordered", FULFILLED: "Delivered", REJECTED: "Rejected" } as const;
+export const PO_STATUS = { DRAFT: "Draft", APPROVED: "Approved", ORDERED: "Ordered", DELIVERED: "Delivered", CANCELLED: "Cancelled" } as const;
+export const EXPENSE_CATEGORY = { LABOUR: "Labour", MATERIALS: "Materials", SUBCONTRACT: "Subcontract", EQUIPMENT: "Equipment", OVERHEADS: "Overheads", OTHER: "Other" } as const;
+export const EXPENSE_STATUS = { PENDING: "Pending", APPROVED: "Approved", PAID: "Paid" } as const;
+export const DOC_CATEGORY = { DRAWING: "Drawing", CONTRACT: "Contract", BOQ: "BOQ", QUOTATION: "Quotation", PURCHASE_ORDER: "Purchase order", INVOICE: "Invoice", REPORT: "Report", CERTIFICATE: "Certificate", OTHER: "Other" } as const;
+export const DOC_AUDIENCE = { MANAGERS: "Managers only", PROJECT: "Project team", EXTERNAL: "Team + contractors" } as const;
+export const REQUEST_TONE: Record<string, Tone> = { REQUESTED: "amber", APPROVED: "teal", ORDERED: "sand", FULFILLED: "green", REJECTED: "red" };
+export const PO_TONE: Record<string, Tone> = { DRAFT: "grey", APPROVED: "teal", ORDERED: "sand", DELIVERED: "green", CANCELLED: "red" };
+export const EXPENSE_TONE: Record<string, Tone> = { PENDING: "amber", APPROVED: "teal", PAID: "green" };
+/** Full rupee amount with Indian digit grouping, e.g. ₹12,50,000. */
+export const inr = (n: number) => `₹${Math.round(n).toLocaleString("en-IN")}`;
+export const num = (n: number, d = 1) => (Number.isInteger(n) ? n.toLocaleString("en-IN") : n.toLocaleString("en-IN", { maximumFractionDigits: d }));
+export const monthKey = (d: Date) => toInputDate(d).slice(0, 7);
+
+export const BILL_STATUS = { DRAFT: "Draft", SUBMITTED: "Submitted", CERTIFIED: "Certified", INVOICED: "Invoiced" } as const;
+export const BILL_TONE: Record<string, Tone> = { DRAFT: "grey", SUBMITTED: "amber", CERTIFIED: "teal", INVOICED: "green" };

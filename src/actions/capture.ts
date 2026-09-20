@@ -3,10 +3,11 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { action, cuid, files, obj, optDate, optId } from "@/lib/action";
-import { assertProject, isManager, taskScope, UserError } from "@/lib/access";
+import { assertOperations, assertProject, isManager, taskScope, UserError } from "@/lib/access";
 import { logActivity, notify, projectStewards, recomputeProgress } from "@/lib/services";
 import { storeFiles } from "@/lib/storage";
-import { taskData } from "@/lib/task";
+import { inspectionGate } from "@/lib/inspections";
+import { qtyData, taskData } from "@/lib/task";
 import { parseDate, TASK_STATUS } from "@/lib/utils";
 
 const refresh = () => revalidatePath("/", "layout");
@@ -14,10 +15,13 @@ const plural = (n: number, s: string) => `${n} ${s}${n === 1 ? "" : "s"}`;
 
 /** ADD PROGRESS: photo(s) + task status + note → one ProgressUpdate, structured as project evidence. */
 export const submitProgress = action(async (u, fd) => {
+  assertOperations(u);
   const d = z.object({
     projectId: cuid("Project"), clientId: z.string().max(64).optional(), taskId: optId, note: z.string().max(2000).optional(),
     status: z.enum(["NOT_STARTED", "IN_PROGRESS", "COMPLETED", "VERIFIED"]).optional(),
     progress: z.coerce.number().int().min(0).max(100).optional(),
+    block: z.string().max(60).optional(), floor: z.string().max(60).optional(), area: z.string().max(80).optional(),
+    quantity: z.coerce.number().min(0).max(1e9).optional(),
   }).parse(obj(fd));
   const project = await assertProject(u, d.projectId);
   // Idempotency: an offline retry of an already-received submission is acknowledged, not duplicated.
@@ -27,8 +31,11 @@ export const submitProgress = action(async (u, fd) => {
   // Supervisors can only touch tasks assigned to them.
   const task = d.taskId ? await prisma.task.findFirst({ where: { id: d.taskId, projectId: project.id, ...taskScope(u) } }) : null;
   if (d.taskId && !task) throw new UserError("That task isn't assigned to you.");
-  if (d.status === "VERIFIED" && !isManager(u)) throw new UserError("Only managers can verify a task.");
-  const change = task && d.status ? taskData(d.status, d.progress, task) : task && d.progress != null ? taskData(task.status === "NOT_STARTED" ? "IN_PROGRESS" : task.status, d.progress, task) : null;
+  if (d.status === "VERIFIED" && !(isManager(u) || u.role === "SITE_ENGINEER")) throw new UserError("Only managers and site engineers can verify a task.");
+  if (task && d.status === "VERIFIED" && task.status !== "VERIFIED") { const g = await inspectionGate(u.companyId, task.id); if (g) throw new UserError(g); }
+  // Quantity-measured tasks: progress and status are derived from the quantity done so far.
+  const qtyChange = task?.quantityTotal ? qtyData(task.quantityTotal, d.status === "COMPLETED" || d.status === "VERIFIED" ? task.quantityTotal : task.quantityDone + (d.quantity ?? 0), task) : null;
+  const change = qtyChange ?? (task && d.status ? taskData(d.status, d.progress, task) : task && d.progress != null ? taskData(task.status === "NOT_STARTED" ? "IN_PROGRESS" : task.status, d.progress, task) : null);
   const statusChanged = !!change && change.status !== task!.status;
   if (!upload.length && !d.note && !change) throw new UserError("Add a photo, a note or a status change.");
 
@@ -38,9 +45,9 @@ export const submitProgress = action(async (u, fd) => {
   await prisma.$transaction(async (tx) => {
     await tx.progressUpdate.create({
       data: {
-        clientId: d.clientId, companyId: u.companyId, projectId: project.id, taskId: task?.id, userId: u.id, note: d.note,
+        clientId: d.clientId, companyId: u.companyId, projectId: project.id, taskId: task?.id, userId: u.id, note: d.note, block: d.block, floor: d.floor, locationArea: d.area, quantity: d.quantity,
         statusBefore: task?.status, statusAfter: change?.status, progress: change?.progress,
-        photos: { create: stored.map((s) => ({ companyId: u.companyId, projectId: project.id, taskId: task?.id, userId: u.id, storageKey: s.key, mime: s.mime, size: s.size })) },
+        photos: { create: stored.map((s) => ({ companyId: u.companyId, projectId: project.id, taskId: task?.id, userId: u.id, block: d.block, floor: d.floor, locationArea: d.area, storageKey: s.key, mime: s.mime, size: s.size })) },
       },
     });
     if (task && change) await tx.task.update({ where: { id: task.id }, data: change });
@@ -60,8 +67,9 @@ export const submitProgress = action(async (u, fd) => {
 });
 
 export const reportIssue = action(async (u, fd) => {
+  assertOperations(u);
   const d = z.object({
-    projectId: cuid("Project"), clientId: z.string().max(64).optional(), taskId: optId, area: z.string().max(120).optional(),
+    projectId: cuid("Project"), clientId: z.string().max(64).optional(), taskId: optId, area: z.string().max(120).optional(), block: z.string().max(60).optional(), floor: z.string().max(60).optional(),
     title: z.string().min(3, "Give the issue a short title").max(140),
     description: z.string().max(2000).optional(),
     severity: z.enum(["LOW", "MEDIUM", "HIGH", "CRITICAL"]).default("MEDIUM"),
@@ -78,7 +86,7 @@ export const reportIssue = action(async (u, fd) => {
   await prisma.$transaction(async (tx) => {
     await tx.issue.create({
       data: {
-        clientId: d.clientId, companyId: u.companyId, projectId: project.id, taskId: d.taskId, area: d.area, title: d.title, description: d.description, severity: d.severity,
+        clientId: d.clientId, companyId: u.companyId, projectId: project.id, taskId: d.taskId, area: d.area, block: d.block, floor: d.floor, title: d.title, description: d.description, severity: d.severity,
         reporterId: u.id, assigneeId: assignee?.id, status: assignee ? "ASSIGNED" : "OPEN", dueDate: parseDate(d.dueDate),
         photos: { create: stored.map((s) => ({ companyId: u.companyId, projectId: project.id, taskId: d.taskId, userId: u.id, storageKey: s.key, mime: s.mime, size: s.size })) },
       },
@@ -92,6 +100,7 @@ export const reportIssue = action(async (u, fd) => {
 });
 
 export const submitSiteUpdate = action(async (u, fd) => {
+  assertOperations(u);
   const d = z.object({
     projectId: cuid("Project"), clientId: z.string().max(64).optional(), workCompleted: z.string().max(2000).optional(), workPlanned: z.string().max(2000).optional(),
     workforceCount: z.coerce.number().int().min(0).max(100000).default(0), materialsReceived: z.string().max(1000).optional(), notes: z.string().max(2000).optional(),

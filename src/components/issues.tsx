@@ -5,8 +5,8 @@ import { Avatar, Chip, EmptyState, Photo, Select, inputCls } from "./ui";
 import { fmtDate, fmtTime, ISSUE_STATUS, ISSUE_TONE, opts, SEVERITY, SEVERITY_TONE, toInputDate } from "@/lib/utils";
 
 type Row = {
-  id: string; title: string; description: string | null; area: string | null; severity: keyof typeof SEVERITY; status: keyof typeof ISSUE_STATUS; createdAt: Date; dueDate: Date | null; assigneeId: string | null;
-  reporter: { name: string }; assignee: { name: string } | null; task: { title: string } | null; photos: { id: string }[]; project?: { name: string };
+  id: string; title: string; description: string | null; area: string | null; block?: string | null; floor?: string | null; severity: keyof typeof SEVERITY; status: keyof typeof ISSUE_STATUS; createdAt: Date; dueDate: Date | null; assigneeId: string | null;
+  reporter: { name: string }; assignee: { name: string } | null; task: { title: string } | null; photos: { id: string }[]; project?: { name: string }; inspectionItemId?: string | null; documentId?: string | null;
 };
 
 export function IssuesList({ issues, people, showProject, canManage = true }: { issues: Row[]; people: { id: string; name: string }[]; showProject?: boolean; canManage?: boolean }) {
@@ -20,12 +20,12 @@ export function IssuesList({ issues, people, showProject, canManage = true }: { 
               <div className="flex shrink-0 gap-2">{i.photos.slice(0, 2).map((p) => <a key={p.id} href={`/api/photos/${p.id}`} target="_blank" rel="noreferrer"><Photo id={p.id} className="size-24 rounded-lg" alt={i.title} /></a>)}</div>
             )}
             <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2"><Chip tone={SEVERITY_TONE[i.severity]} dot>{SEVERITY[i.severity]}</Chip><Chip tone={ISSUE_TONE[i.status]}>{ISSUE_STATUS[i.status]}</Chip></div>
+              <div className="flex flex-wrap items-center gap-2"><Chip tone={SEVERITY_TONE[i.severity]} dot>{SEVERITY[i.severity]}</Chip><Chip tone={ISSUE_TONE[i.status]}>{ISSUE_STATUS[i.status]}</Chip>{i.inspectionItemId && <Chip tone="sand">Snag</Chip>}{i.documentId && <Chip tone="teal">Pinned on drawing</Chip>}</div>
               <h3 className="mt-2 text-base font-semibold leading-snug">{i.title}</h3>
               {i.description && <p className="mt-1 text-sm text-muted">{i.description}</p>}
               <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
                 {showProject && i.project && <span className="font-medium text-charcoal">{i.project.name}</span>}
-                {(i.area || i.task) && <span>{[i.area, i.task?.title].filter(Boolean).join(" · ")}</span>}
+                {(i.area || i.task || i.block || i.floor) && <span>{[i.block, i.floor, i.area, i.task?.title].filter(Boolean).join(" · ")}</span>}
                 <span className="flex items-center gap-1.5"><Avatar name={i.reporter.name} size={18} />{i.reporter.name}</span>
                 <span>{fmtDate(i.createdAt)}, {fmtTime(i.createdAt)}</span>
                 {i.dueDate && <span>Due {fmtDate(i.dueDate)}</span>}

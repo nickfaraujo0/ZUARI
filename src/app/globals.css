@@ -13,8 +13,8 @@
   --color-charcoal: #18201e;
   --color-line: #e4dfd2;
   --color-muted: #6b7572;
-  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
-  --font-serif: var(--font-cormorant), Georgia, serif;
+  --font-sans: var(--font-inter), var(--font-deva), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-cormorant), var(--font-deva), Georgia, serif;
   --font-mono: var(--font-plex), ui-monospace, monospace;
 }
 

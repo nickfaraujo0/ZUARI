@@ -2,7 +2,7 @@ import { Images } from "lucide-react";
 import type { Prisma } from "@prisma/client";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { requireProject } from "@/lib/access";
+import { isManager, requireProject } from "@/lib/access";
 import { GroupedGallery } from "@/components/blocks";
 import { PhotoFilters, ViewToggle } from "@/components/photo-filters";
 import { Card, EmptyState } from "@/components/ui";
@@ -19,6 +19,7 @@ export default async function PhotosTab({ params, searchParams }: { params: Prom
   const where: Prisma.ProgressPhotoWhereInput = {
     projectId: p.id, companyId: u.companyId,
     ...(sp.task ? { taskId: sp.task } : {}), ...(sp.user ? { userId: sp.user } : {}),
+    ...(sp.block ? { block: { contains: sp.block, mode: "insensitive" as const } } : {}), ...(sp.floor ? { floor: { contains: sp.floor, mode: "insensitive" as const } } : {}),
     ...(day ? { takenAt: { gte: day, lt: new Date(day.getTime() + 864e5) } } : {}),
   };
   const [photos, tasks, users] = await Promise.all([
@@ -33,7 +34,7 @@ export default async function PhotosTab({ params, searchParams }: { params: Prom
         <ViewToggle view={view} base={`/projects/${p.id}/photos`} />
       </div>
       <PhotoFilters view={view} tasks={tasks} users={users} values={sp} />
-      {photos.length === 0 ? <Card><EmptyState icon={<Images className="size-5" />} title="No photos found" body="Progress photos captured in ZUARI Site appear here, grouped by date and activity." /></Card> : <GroupedGallery photos={photos} groupBy={view === "journal" ? "phase" : "task"} />}
+      {photos.length === 0 ? <Card><EmptyState icon={<Images className="size-5" />} title="No photos found" body="Progress photos captured in ZUARI Site appear here, grouped by date and activity." /></Card> : <GroupedGallery photos={photos} shareToggle={isManager(u)} groupBy={view === "journal" ? "phase" : "task"} />}
     </>
   );
 }

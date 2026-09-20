@@ -2,16 +2,16 @@ import Link from "next/link";
 import { createTask, quickTask, updateTask, deleteTask } from "@/actions/tasks";
 import { ActionForm, AutoSelect, ConfirmSubmit } from "./forms";
 import { Avatar, EmptyState, Field, inputCls, Progress, Select } from "./ui";
-import { dueLabel, opts, PRIORITY, ROLE_LABEL, startOfToday, TASK_STATUS, toInputDate } from "@/lib/utils";
+import { dueLabel, num, opts, PRIORITY, ROLE_LABEL, startOfToday, TASK_STATUS, toInputDate } from "@/lib/utils";
 import { ListChecks } from "lucide-react";
 
 type Person = { id: string; name: string; role: keyof typeof ROLE_LABEL };
 type TaskRow = {
   id: string; title: string; status: keyof typeof TASK_STATUS; priority: keyof typeof PRIORITY; progress: number; dueDate: Date | null; projectId: string;
-  assignee: { name: string } | null; phase: { name: string } | null; project?: { name: string };
+  assignee: { name: string } | null; phase: { name: string } | null; project?: { name: string }; quantityTotal?: number | null; quantityDone?: number; quantityUnit?: string | null;
 };
 
-export function TasksTable({ tasks, showProject }: { tasks: TaskRow[]; showProject?: boolean }) {
+export function TasksTable({ tasks, showProject, canManage = true }: { tasks: TaskRow[]; showProject?: boolean; canManage?: boolean }) {
   if (!tasks.length) return <EmptyState icon={<ListChecks className="size-5" />} title="No tasks match" body="Create a task and assign it to a supervisor — it appears on their phone immediately." />;
   const today = startOfToday();
   return (
@@ -27,11 +27,11 @@ export function TasksTable({ tasks, showProject }: { tasks: TaskRow[]; showProje
               <tr key={t.id} className="border-b border-line/70 last:border-0 hover:bg-stone-50/50">
                 <td className="px-5 py-2.5"><Link href={`/projects/${t.projectId}/tasks/${t.id}`} className="font-medium hover:underline">{t.title}</Link><span className="block text-xs text-muted">{[showProject && t.project?.name, t.phase?.name].filter(Boolean).join(" · ") || "No phase"}</span></td>
                 <td className="px-3"><span className="flex items-center gap-2">{t.assignee ? <><Avatar name={t.assignee.name} size={24} />{t.assignee.name}</> : <span className="text-muted">Unassigned</span>}</span></td>
-                <td className="px-3"><ActionForm action={quickTask} hideSubmit><input type="hidden" name="taskId" value={t.id} /><AutoSelect name="priority" defaultValue={t.priority} options={opts(PRIORITY)} /></ActionForm></td>
+                <td className="px-3">{canManage ? <ActionForm action={quickTask} hideSubmit><input type="hidden" name="taskId" value={t.id} /><AutoSelect name="priority" defaultValue={t.priority} options={opts(PRIORITY)} /></ActionForm> : <span className="text-[13px]">{PRIORITY[t.priority]}</span>}</td>
                 <td className={`px-3 text-[13px] ${late ? "font-medium text-red-700" : ""}`}>{dueLabel(t.dueDate)}</td>
-                <td className="px-3"><ActionForm action={quickTask} hideSubmit><input type="hidden" name="taskId" value={t.id} /><AutoSelect name="status" defaultValue={t.status} options={opts(TASK_STATUS)} /></ActionForm></td>
-                <td className="px-3"><div className="flex w-28 items-center gap-2"><Progress value={t.progress} thin /><span className="text-xs tabular-nums">{t.progress}%</span></div></td>
-                <td className="px-3 text-right"><Link href={`/projects/${t.projectId}/tasks/${t.id}`} className="text-xs font-medium text-river hover:underline">Edit</Link></td>
+                <td className="px-3">{canManage ? <ActionForm action={quickTask} hideSubmit><input type="hidden" name="taskId" value={t.id} /><AutoSelect name="status" defaultValue={t.status} options={opts(TASK_STATUS)} /></ActionForm> : <span className="text-[13px]">{TASK_STATUS[t.status]}</span>}</td>
+                <td className="px-3"><div className="w-28"><div className="flex items-center gap-2"><Progress value={t.progress} thin /><span className="text-xs tabular-nums">{t.progress}%</span></div>{t.quantityTotal ? <span className="text-[11px] text-muted">{num(t.quantityDone ?? 0)}/{num(t.quantityTotal)} {t.quantityUnit}</span> : null}</div></td>
+                <td className="px-3 text-right">{canManage && <Link href={`/projects/${t.projectId}/tasks/${t.id}`} className="text-xs font-medium text-river hover:underline">Edit</Link>}</td>
               </tr>
             );
           })}
@@ -43,7 +43,7 @@ export function TasksTable({ tasks, showProject }: { tasks: TaskRow[]; showProje
 
 export function TaskForm({ projectId, phases, people, task }: {
   projectId: string; phases: { id: string; name: string }[]; people: Person[];
-  task?: { id: string; title: string; description: string | null; phaseId: string | null; assigneeId: string | null; priority: string; status: string; progress: number; startDate: Date | null; dueDate: Date | null };
+  task?: { id: string; title: string; description: string | null; phaseId: string | null; assigneeId: string | null; priority: string; status: string; progress: number; startDate: Date | null; dueDate: Date | null; weatherSensitive?: boolean; quantityTotal?: number | null; quantityDone?: number; quantityUnit?: string | null };
 }) {
   return (
     <ActionForm action={task ? updateTask : createTask} reset={!task} submit={task ? "Save changes" : "Create task"} className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -58,6 +58,10 @@ export function TaskForm({ projectId, phases, people, task }: {
         <Field label="Status"><Select name="status" defaultValue={task.status} options={opts(TASK_STATUS)} /></Field>
         <Field label="Progress (%)" hint="Used while In Progress; Completed is 100%"><input type="number" name="progress" min={0} max={100} defaultValue={task.progress} className={inputCls} /></Field>
       </>)}
+      <Field label="Quantity to complete (optional)" hint="Progress is then measured by quantity"><input name="quantityTotal" type="number" step="any" min="0" defaultValue={task?.quantityTotal ?? ""} className={inputCls} placeholder="e.g. 120" /></Field>
+      <Field label="Unit"><input name="quantityUnit" defaultValue={task?.quantityUnit ?? ""} className={inputCls} placeholder="m³, m², nos…" /></Field>
+      {task?.quantityTotal ? <Field label="Quantity done"><input name="quantityDone" type="number" step="any" min="0" defaultValue={task.quantityDone} className={inputCls} /></Field> : <span />}
+      <label className="flex items-center gap-2 text-sm sm:col-span-2 lg:col-span-3"><input type="checkbox" name="weatherSensitive" defaultChecked={task?.weatherSensitive} className="size-4 accent-[#123C36]" />Weather-sensitive (exterior work) — flagged when rain is forecast</label>
       <Field label="Description" className="sm:col-span-2 lg:col-span-3"><textarea name="description" rows={3} defaultValue={task?.description ?? ""} className={`${inputCls} h-auto py-2`} /></Field>
     </ActionForm>
   );

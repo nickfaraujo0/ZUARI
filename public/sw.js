@@ -91,3 +91,19 @@ self.addEventListener("message", (e) => {
   if (e.data && e.data.type === "warm") e.waitUntil(warm(e.data.urls || []));
   if (e.data && e.data.type === "clear") e.waitUntil(caches.delete(PAGES));
 });
+
+// ── Web push ─────────────────────────────────────────────────
+self.addEventListener("push", (e) => {
+  let d = {};
+  try { d = e.data ? e.data.json() : {}; } catch { d = { title: "ZUARI", body: e.data ? e.data.text() : "" }; }
+  e.waitUntil(self.registration.showNotification(d.title || "ZUARI", { body: d.body || "", icon: "/icon-192.png", badge: "/icon-192.png", data: { url: d.url || "/" } }));
+});
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const url = new URL((e.notification.data && e.notification.data.url) || "/", self.location.origin).href;
+  e.waitUntil((async () => {
+    const all = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    for (const c of all) if ("focus" in c) { await c.focus(); if ("navigate" in c) { try { await c.navigate(url); } catch { /* cross-origin */ } } return; }
+    await self.clients.openWindow(url);
+  })());
+});

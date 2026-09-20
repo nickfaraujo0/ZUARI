@@ -4,30 +4,47 @@ import { notFound } from "next/navigation";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { getUser, type SessionUser } from "./auth";
-
 import { UserError } from "./errors";
+import { isSiteRole } from "./roles";
 export { UserError };
 
-export const isDirector = (u: SessionUser) => u.role === "DIRECTOR";
-export const isManager = (u: SessionUser) => u.role !== "SITE_SUPERVISOR";
+/*
+ * Roles
+ *  DIRECTOR         everything, whole company
+ *  PROJECT_MANAGER  manages assigned projects (tasks, people, procurement, workforce, documents)
+ *  ACCOUNTANT       whole company, read-only on operations; owns budgets, expenses, payments
+ *  SITE_ENGINEER    mobile; sees all work in member projects; can verify tasks and upload drawings
+ *  SITE_SUPERVISOR  mobile; sees only tasks assigned to them
+ *  CONTRACTOR       mobile; external: assigned tasks and own photos only, no internal documents
+ */
+type U = Pick<SessionUser, "role">;
+export const isDirector = (u: U) => u.role === "DIRECTOR";
+export const isManager = (u: U) => u.role === "DIRECTOR" || u.role === "PROJECT_MANAGER";
+export const isFinance = (u: U) => u.role === "DIRECTOR" || u.role === "ACCOUNTANT";
+export const isSite = (u: U) => isSiteRole(u.role);
+export const canUploadDocs = (u: U) => isManager(u) || u.role === "SITE_ENGINEER";
+const seesWholeCompany = (u: U) => u.role === "DIRECTOR" || u.role === "ACCOUNTANT";
+const seesAllTasks = (u: U) => isManager(u) || u.role === "ACCOUNTANT" || u.role === "SITE_ENGINEER";
 
-/** Every project query must go through this: tenant + membership. Directors see the whole company. */
+/** Every project query must go through this: tenant + membership. */
 export const projectScope = (u: SessionUser): Prisma.ProjectWhereInput => ({
   companyId: u.companyId,
-  ...(isDirector(u) ? {} : { members: { some: { userId: u.id } } }),
+  ...(seesWholeCompany(u) ? {} : { members: { some: { userId: u.id } } }),
 });
-
-/** Supervisors only ever see tasks assigned to them. */
 export const taskScope = (u: SessionUser): Prisma.TaskWhereInput => ({
-  companyId: u.companyId,
-  project: projectScope(u),
-  ...(isManager(u) ? {} : { assigneeId: u.id }),
+  companyId: u.companyId, project: projectScope(u), ...(seesAllTasks(u) ? {} : { assigneeId: u.id }),
 });
-
 export const issueScope = (u: SessionUser): Prisma.IssueWhereInput => ({
-  companyId: u.companyId,
-  project: projectScope(u),
-  ...(isManager(u) ? {} : { OR: [{ reporterId: u.id }, { assigneeId: u.id }] }),
+  companyId: u.companyId, project: projectScope(u), ...(seesAllTasks(u) ? {} : { OR: [{ reporterId: u.id }, { assigneeId: u.id }] }),
+});
+/** Contractors only ever see their own photos. */
+export const photoScope = (u: SessionUser): Prisma.ProgressPhotoWhereInput => ({
+  companyId: u.companyId, project: projectScope(u), ...(u.role === "CONTRACTOR" ? { userId: u.id } : {}),
+});
+/** Documents are filtered by audience: managers/accountant see all; site staff see PROJECT+EXTERNAL; contractors only EXTERNAL. */
+export const docScope = (u: SessionUser): Prisma.DocumentWhereInput => ({
+  companyId: u.companyId, project: projectScope(u),
+  ...(isManager(u) || u.role === "ACCOUNTANT" ? {} : { audience: { in: u.role === "CONTRACTOR" ? ["EXTERNAL"] : ["PROJECT", "EXTERNAL"] } }),
 });
 
 export const getProject = (u: SessionUser, id: string) => prisma.project.findFirst({ where: { id, ...projectScope(u) } });
@@ -50,8 +67,20 @@ export async function assertProject(u: SessionUser, id: string) {
   return p;
 }
 export function assertManager(u: SessionUser) {
-  if (!isManager(u)) throw new UserError("Only managers can do that.");
+  if (!isManager(u)) throw new UserError("Only directors and project managers can do that.");
 }
 export function assertDirector(u: SessionUser) {
   if (!isDirector(u)) throw new UserError("Only directors can do that.");
+}
+export function assertFinance(u: SessionUser) {
+  if (!isFinance(u)) throw new UserError("Only directors and accountants can do that.");
+}
+
+/** Site activity (capture, attendance, stock) is for managers and site roles; accountants are finance-only. */
+export function assertOperations(u: SessionUser) {
+  if (u.role === "ACCOUNTANT") throw new UserError("Accountants can't record site activity.");
+}
+/** Pages that only managers use: everyone else gets a 404 (nav hides them too). */
+export function requireManagerPage(u: SessionUser) {
+  if (!isManager(u)) notFound();
 }

@@ -7,6 +7,7 @@ import { action, cuid, dateStr, obj, optId } from "@/lib/action";
 import { assertDirector, assertManager, assertProject, isDirector, UserError } from "@/lib/access";
 import { logActivity, nextProjectCode, notify, recomputeProgress } from "@/lib/services";
 import { parseDate } from "@/lib/utils";
+import { isSiteRole } from "@/lib/roles";
 
 const refresh = () => revalidatePath("/", "layout");
 const DEFAULT_PHASES = ["Foundation", "Structure", "Masonry", "Electrical", "Plumbing", "Finishing"];
@@ -21,6 +22,8 @@ const projectFields = z.object({
   budget: z.coerce.number({ error: "Budget must be a number" }).min(0).max(1e12),
   managerId: cuid("Project manager"),
   description: z.string().max(1000).optional(),
+  latitude: z.coerce.number().min(-90).max(90).optional(),
+  longitude: z.coerce.number().min(-180).max(180).optional(),
 });
 
 export const createProject = action(async (u, fd) => {
@@ -28,17 +31,19 @@ export const createProject = action(async (u, fd) => {
   const d = projectFields.parse(obj(fd));
   const start = parseDate(d.startDate)!, end = parseDate(d.expectedEnd)!;
   if (end <= start) throw new UserError("Expected completion must be after the start date.");
-  const manager = await prisma.user.findFirst({ where: { id: d.managerId, companyId: u.companyId, active: true, role: { not: "SITE_SUPERVISOR" } } });
+  const manager = await prisma.user.findFirst({ where: { id: d.managerId, companyId: u.companyId, active: true, role: { in: ["DIRECTOR", "PROJECT_MANAGER"] } } });
   if (!manager) throw new UserError("Choose a project manager or director from your company.");
 
-  const span = (end.getTime() - start.getTime()) / DEFAULT_PHASES.length;
+  const tpl = (await prisma.company.findUnique({ where: { id: u.companyId }, select: { phaseTemplate: true } }))?.phaseTemplate;
+  const PHASES = tpl?.length ? tpl : DEFAULT_PHASES;
+  const span = (end.getTime() - start.getTime()) / PHASES.length;
   const project = await prisma.$transaction(async (tx) => {
     const p = await tx.project.create({
       data: {
         companyId: u.companyId, code: await nextProjectCode(u.companyId), name: d.name, client: d.client, location: d.location, type: d.type,
-        startDate: start, expectedEnd: end, budget: d.budget, description: d.description, managerId: manager.id,
+        startDate: start, expectedEnd: end, budget: d.budget, description: d.description, latitude: d.latitude, longitude: d.longitude, managerId: manager.id,
         members: { create: [{ companyId: u.companyId, userId: manager.id }] },
-        phases: { create: DEFAULT_PHASES.map((name, i) => ({ companyId: u.companyId, name, position: i, startDate: new Date(start.getTime() + span * i), endDate: new Date(start.getTime() + span * (i + 1)) })) },
+        phases: { create: PHASES.map((name, i) => ({ companyId: u.companyId, name, position: i, startDate: new Date(start.getTime() + span * i), endDate: new Date(start.getTime() + span * (i + 1)) })) },
       },
     });
     await logActivity({ companyId: u.companyId, projectId: p.id, actorId: u.id, type: "PROJECT_CREATED", message: `${u.name} created the project`, detail: p.name }, tx);
@@ -66,7 +71,7 @@ export const addMember = action(async (u, fd) => {
   if (!person) throw new UserError("That person isn't in your company.");
   await prisma.projectMember.upsert({ where: { projectId_userId: { projectId: p.id, userId: person.id } }, update: {}, create: { companyId: u.companyId, projectId: p.id, userId: person.id } });
   await logActivity({ companyId: u.companyId, projectId: p.id, actorId: u.id, type: "MEMBER_ADDED", message: `${person.name} added to the project team`, detail: p.name });
-  await notify(u.companyId, [person.id], { type: "PROJECT_ASSIGNED", title: "You were added to a project", body: p.name, href: person.role === "SITE_SUPERVISOR" ? "/site" : `/projects/${p.id}` }, u.id);
+  await notify(u.companyId, [person.id], { type: "PROJECT_ASSIGNED", title: "You were added to a project", body: p.name, href: isSiteRole(person.role) ? "/site" : `/projects/${p.id}` }, u.id);
   refresh();
 });
 
@@ -131,13 +136,13 @@ export const updateProject = action(async (u, fd) => {
   if (end <= start) throw new UserError("Expected completion must be after the start date.");
   let managerId = p.managerId;
   if (isDirector(u) && d.managerId && d.managerId !== p.managerId) {
-    const m = await prisma.user.findFirst({ where: { id: d.managerId, companyId: u.companyId, active: true, role: { not: "SITE_SUPERVISOR" } } });
+    const m = await prisma.user.findFirst({ where: { id: d.managerId, companyId: u.companyId, active: true, role: { in: ["DIRECTOR", "PROJECT_MANAGER"] } } });
     if (!m) throw new UserError("Choose a project manager or director from your company.");
     managerId = m.id;
     await prisma.projectMember.upsert({ where: { projectId_userId: { projectId: p.id, userId: m.id } }, update: {}, create: { companyId: u.companyId, projectId: p.id, userId: m.id } });
     await notify(u.companyId, [m.id], { type: "PROJECT_ASSIGNED", title: "You now manage a project", body: d.name, href: `/projects/${p.id}` }, u.id);
   }
-  await prisma.project.update({ where: { id: p.id }, data: { name: d.name, client: d.client, location: d.location, type: d.type, startDate: start, expectedEnd: end, budget: d.budget, description: d.description ?? null, managerId } });
+  await prisma.project.update({ where: { id: p.id }, data: { name: d.name, client: d.client, location: d.location, type: d.type, startDate: start, expectedEnd: end, budget: d.budget, description: d.description ?? null, latitude: d.latitude ?? null, longitude: d.longitude ?? null, managerId } });
   await logActivity({ companyId: u.companyId, projectId: p.id, actorId: u.id, type: "PROJECT_UPDATED", message: `${u.name} updated the project details`, detail: d.name });
   refresh();
   redirect(`/projects/${p.id}`);

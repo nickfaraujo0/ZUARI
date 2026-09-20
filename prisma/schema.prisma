@@ -10,7 +10,10 @@ datasource db {
 enum Role {
   DIRECTOR
   PROJECT_MANAGER
+  SITE_ENGINEER
   SITE_SUPERVISOR
+  CONTRACTOR
+  ACCOUNTANT
 }
 
 enum ProjectType {
@@ -59,23 +62,54 @@ enum IssueStatus {
 
 // ── Tenant root ────────────────────────────────────────────────
 model Company {
-  id        String   @id @default(cuid())
-  name      String
-  createdAt DateTime @default(now())
+  id            String   @id @default(cuid())
+  name          String
+  createdAt     DateTime @default(now())
+  address       String?
+  gstin         String?
+  phone         String?
+  email         String?
+  phaseTemplate String[] @default(["Foundation", "Structure", "Masonry", "Electrical", "Plumbing", "Finishing"])
 
   users    User[]
   projects Project[]
 
-  projectMembers  ProjectMember[]
-  projectPhases   ProjectPhase[]
-  tasks           Task[]
-  taskComments    TaskComment[]
-  progressUpdates ProgressUpdate[]
-  progressPhotos  ProgressPhoto[]
-  issues          Issue[]
-  siteReports     SiteReport[]
-  notifications   Notification[]
-  activityLogs    ActivityLog[]
+  projectMembers      ProjectMember[]
+  projectPhases       ProjectPhase[]
+  tasks               Task[]
+  taskComments        TaskComment[]
+  progressUpdates     ProgressUpdate[]
+  progressPhotos      ProgressPhoto[]
+  issues              Issue[]
+  siteReports         SiteReport[]
+  notifications       Notification[]
+  activityLogs        ActivityLog[]
+  contractors         Contractor[]
+  suppliers           Supplier[]
+  workers             Worker[]
+  attendance          Attendance[]
+  materials           Material[]
+  materialTxns        MaterialTxn[]
+  materialRequests    MaterialRequest[]
+  purchaseOrders      PurchaseOrder[]
+  purchaseOrderLines  PurchaseOrderLine[]
+  budgetLines         BudgetLine[]
+  expenses            Expense[]
+  documents           Document[]
+  documentVersions    DocumentVersion[]
+  escalateIssueHours  Int                  @default(4)
+  escalateTaskDays    Int                  @default(3)
+  tallyBankLedger     String               @default("Bank Account")
+  inspectionTemplates InspectionTemplate[]
+  inspections         Inspection[]
+  inspectionItems     InspectionItem[]
+  delayLogs           DelayLog[]
+  raBills             RABill[]
+  raBillLines         RABillLine[]
+  clientShares        ClientShare[]
+  safetyIncidents     SafetyIncident[]
+  toolboxTalks        ToolboxTalk[]
+  warranties          Warranty[]
 }
 
 model User {
@@ -91,25 +125,41 @@ model User {
   failedLogins Int       @default(0)
   lockedUntil  DateTime?
   tokenVersion Int       @default(0)
+  contractorId String?
   createdAt    DateTime  @default(now())
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
-  managedProjects Project[]        @relation("ProjectManager")
-  memberships     ProjectMember[]
-  assignedTasks   Task[]           @relation("TaskAssignee")
-  createdTasks    Task[]           @relation("TaskCreator")
-  comments        TaskComment[]
-  updates         ProgressUpdate[]
-  photos          ProgressPhoto[]
-  reportedIssues  Issue[]          @relation("IssueReporter")
-  assignedIssues  Issue[]          @relation("IssueAssignee")
-  siteReports     SiteReport[]
-  notifications   Notification[]
-  activity        ActivityLog[]
-  passwordResets  PasswordReset[]
+  managedProjects  Project[]          @relation("ProjectManager")
+  memberships      ProjectMember[]
+  assignedTasks    Task[]             @relation("TaskAssignee")
+  createdTasks     Task[]             @relation("TaskCreator")
+  comments         TaskComment[]
+  updates          ProgressUpdate[]
+  photos           ProgressPhoto[]
+  reportedIssues   Issue[]            @relation("IssueReporter")
+  assignedIssues   Issue[]            @relation("IssueAssignee")
+  siteReports      SiteReport[]
+  notifications    Notification[]
+  activity         ActivityLog[]
+  passwordResets   PasswordReset[]
+  contractor       Contractor?        @relation(fields: [contractorId], references: [id], onDelete: SetNull)
+  materialTxns     MaterialTxn[]
+  materialRequests MaterialRequest[]
+  createdPOs       PurchaseOrder[]
+  createdExpenses  Expense[]
+  docVersions      DocumentVersion[]
+  digest           String             @default("NONE")
+  locale           String             @default("en")
+  waOptIn          Boolean            @default(false)
+  inspections      Inspection[]
+  safetyReports    SafetyIncident[]
+  toolboxTalks     ToolboxTalk[]
+  pushSubs         PushSubscription[]
+  phoneKey         String?
 
   @@index([companyId])
+  @@index([phoneKey])
 }
 
 // ── Projects ───────────────────────────────────────────────────
@@ -128,19 +178,35 @@ model Project {
   description String?
   managerId   String?
   progress    Int           @default(0)
+  latitude    Float?
+  longitude   Float?
   createdAt   DateTime      @default(now())
 
   company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   manager User?   @relation("ProjectManager", fields: [managerId], references: [id], onDelete: SetNull)
 
-  members  ProjectMember[]
-  phases   ProjectPhase[]
-  tasks    Task[]
-  updates  ProgressUpdate[]
-  photos   ProgressPhoto[]
-  issues   Issue[]
-  reports  SiteReport[]
-  activity ActivityLog[]
+  members          ProjectMember[]
+  phases           ProjectPhase[]
+  tasks            Task[]
+  updates          ProgressUpdate[]
+  photos           ProgressPhoto[]
+  issues           Issue[]
+  reports          SiteReport[]
+  activity         ActivityLog[]
+  attendance       Attendance[]
+  materialTxns     MaterialTxn[]
+  materialRequests MaterialRequest[]
+  purchaseOrders   PurchaseOrder[]
+  budgetLines      BudgetLine[]
+  expenses         Expense[]
+  documents        Document[]
+  inspections      Inspection[]
+  delayLogs        DelayLog[]
+  raBills          RABill[]
+  clientShares     ClientShare[]
+  safetyIncidents  SafetyIncident[]
+  toolboxTalks     ToolboxTalk[]
+  warranties       Warranty[]
 
   @@unique([companyId, code])
   @@index([companyId])
@@ -172,9 +238,10 @@ model ProjectPhase {
   endDate   DateTime
   progress  Int      @default(0)
 
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tasks   Task[]
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project   Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  delayLogs DelayLog[]
 
   @@index([projectId])
   @@index([companyId])
@@ -204,11 +271,16 @@ model Task {
   assignee  User?         @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   createdBy User?         @relation("TaskCreator", fields: [createdById], references: [id], onDelete: SetNull)
 
-  comments TaskComment[]
-  updates  ProgressUpdate[]
-  photos   ProgressPhoto[]
-  issues   Issue[]
-  company  Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  comments         TaskComment[]
+  updates          ProgressUpdate[]
+  photos           ProgressPhoto[]
+  issues           Issue[]
+  company          Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  weatherSensitive Boolean          @default(false)
+  quantityTotal    Float?
+  quantityDone     Float            @default(0)
+  quantityUnit     String?
+  inspections      Inspection[]
 
   @@index([projectId])
   @@index([assigneeId])
@@ -234,6 +306,9 @@ model TaskComment {
 model ProgressUpdate {
   id           String      @id @default(cuid())
   companyId    String
+  block        String?
+  floor        String?
+  locationArea String?
   clientId     String?
   projectId    String
   taskId       String?
@@ -244,11 +319,12 @@ model ProgressUpdate {
   progress     Int?
   createdAt    DateTime    @default(now())
 
-  project Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  task    Task?           @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  user    User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  photos  ProgressPhoto[]
-  company Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project  Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task     Task?           @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  photos   ProgressPhoto[]
+  company  Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  quantity Float?
 
   @@unique([companyId, clientId])
   @@index([projectId, createdAt])
@@ -259,6 +335,9 @@ model ProgressUpdate {
 model ProgressPhoto {
   id               String   @id @default(cuid())
   companyId        String
+  block            String?
+  floor            String?
+  locationArea     String?
   projectId        String
   taskId           String?
   progressUpdateId String?
@@ -278,6 +357,9 @@ model ProgressPhoto {
   siteReport     SiteReport?     @relation(fields: [siteReportId], references: [id], onDelete: SetNull)
   user           User            @relation(fields: [userId], references: [id], onDelete: Cascade)
   company        Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  clientVisible  Boolean         @default(false)
+  inspectionId   String?
+  inspection     Inspection?     @relation(fields: [inspectionId], references: [id], onDelete: SetNull)
 
   @@index([projectId, takenAt])
   @@index([companyId])
@@ -290,6 +372,8 @@ model Issue {
   projectId   String
   taskId      String?
   area        String?
+  block       String?
+  floor       String?
   title       String
   description String?
   severity    Severity    @default(MEDIUM)
@@ -300,12 +384,19 @@ model Issue {
   resolvedAt  DateTime?
   createdAt   DateTime    @default(now())
 
-  project  Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  task     Task?           @relation(fields: [taskId], references: [id], onDelete: SetNull)
-  reporter User            @relation("IssueReporter", fields: [reporterId], references: [id], onDelete: Cascade)
-  assignee User?           @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
-  photos   ProgressPhoto[]
-  company  Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project          Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task             Task?           @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  reporter         User            @relation("IssueReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  assignee         User?           @relation("IssueAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  photos           ProgressPhoto[]
+  company          Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  inspectionItemId String?
+  inspectionItem   InspectionItem? @relation(fields: [inspectionItemId], references: [id], onDelete: SetNull)
+  documentId       String?
+  document         Document?       @relation(fields: [documentId], references: [id], onDelete: SetNull)
+  pinX             Float?
+  pinY             Float?
+  docVersion       Int?
 
   @@unique([companyId, clientId])
   @@index([projectId, status])
@@ -386,4 +477,618 @@ model PasswordReset {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, createdAt])
+}
+
+// ── Phase 2: people, materials, procurement, finance, documents ─────────────
+enum AttendanceStatus {
+  PRESENT
+  HALF
+  ABSENT
+}
+
+enum TxnType {
+  RECEIVED
+  CONSUMED
+  ADJUSTMENT
+}
+
+enum RequestStatus {
+  REQUESTED
+  APPROVED
+  ORDERED
+  FULFILLED
+  REJECTED
+}
+
+enum PoStatus {
+  DRAFT
+  APPROVED
+  ORDERED
+  DELIVERED
+  CANCELLED
+}
+
+enum ExpenseCategory {
+  LABOUR
+  MATERIALS
+  SUBCONTRACT
+  EQUIPMENT
+  OVERHEADS
+  OTHER
+}
+
+enum ExpenseStatus {
+  PENDING
+  APPROVED
+  PAID
+}
+
+enum DocCategory {
+  DRAWING
+  CONTRACT
+  BOQ
+  QUOTATION
+  PURCHASE_ORDER
+  INVOICE
+  REPORT
+  CERTIFICATE
+  OTHER
+}
+
+enum DocAudience {
+  MANAGERS
+  PROJECT
+  EXTERNAL
+}
+
+model Contractor {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  trade       String
+  contactName String?
+  phone       String?
+  email       String?
+  gstin       String?
+  notes       String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  users    User[]
+  workers  Worker[]
+  expenses Expense[]
+  raBills  RABill[]
+
+  @@index([companyId])
+}
+
+model Supplier {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  category    String?
+  contactName String?
+  phone       String?
+  email       String?
+  gstin       String?
+  address     String?
+  notes       String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  company  Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  orders   PurchaseOrder[]
+  expenses Expense[]
+  txns     MaterialTxn[]
+
+  @@index([companyId])
+}
+
+model Worker {
+  id           String   @id @default(cuid())
+  companyId    String
+  name         String
+  trade        String
+  phone        String?
+  dailyRate    Decimal  @default(0) @db.Decimal(10, 2)
+  contractorId String?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  contractor        Contractor?       @relation(fields: [contractorId], references: [id], onDelete: SetNull)
+  attendance        Attendance[]
+  toolboxAttendance ToolboxAttendee[]
+
+  @@index([companyId])
+}
+
+model Attendance {
+  id            String           @id @default(cuid())
+  companyId     String
+  projectId     String
+  workerId      String
+  date          DateTime
+  status        AttendanceStatus @default(PRESENT)
+  overtimeHours Float            @default(0)
+  markedById    String
+  createdAt     DateTime         @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  worker  Worker  @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@unique([workerId, date])
+  @@index([projectId, date])
+}
+
+model Material {
+  id           String   @id @default(cuid())
+  companyId    String
+  name         String
+  unit         String
+  category     String?
+  reorderLevel Float    @default(0)
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  company  Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  txns     MaterialTxn[]
+  requests MaterialRequest[]
+  poLines  PurchaseOrderLine[]
+
+  @@index([companyId])
+}
+
+model MaterialTxn {
+  id         String   @id @default(cuid())
+  companyId  String
+  projectId  String
+  materialId String
+  type       TxnType
+  quantity   Float
+  note       String?
+  supplierId String?
+  poId       String?
+  userId     String
+  clientId   String?
+  createdAt  DateTime @default(now())
+
+  company  Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project  Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  material Material       @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  supplier Supplier?      @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  po       PurchaseOrder? @relation(fields: [poId], references: [id], onDelete: SetNull)
+  user     User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, clientId])
+  @@index([projectId, materialId])
+}
+
+model MaterialRequest {
+  id            String        @id @default(cuid())
+  companyId     String
+  projectId     String
+  materialId    String
+  quantity      Float
+  neededBy      DateTime?
+  status        RequestStatus @default(REQUESTED)
+  note          String?
+  requestedById String
+  decidedById   String?
+  poId          String?
+  clientId      String?
+  createdAt     DateTime      @default(now())
+
+  company     Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project     Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  material    Material       @relation(fields: [materialId], references: [id], onDelete: Cascade)
+  requestedBy User           @relation(fields: [requestedById], references: [id], onDelete: Cascade)
+  po          PurchaseOrder? @relation(fields: [poId], references: [id], onDelete: SetNull)
+
+  @@unique([companyId, clientId])
+  @@index([projectId, status])
+}
+
+model PurchaseOrder {
+  id           String    @id @default(cuid())
+  companyId    String
+  projectId    String
+  supplierId   String
+  number       String
+  status       PoStatus  @default(DRAFT)
+  orderDate    DateTime  @default(now())
+  expectedDate DateTime?
+  notes        String?
+  createdById  String
+  approvedById String?
+  deliveredAt  DateTime?
+  createdAt    DateTime  @default(now())
+
+  company   Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project   Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  supplier  Supplier            @relation(fields: [supplierId], references: [id], onDelete: NoAction)
+  createdBy User                @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  lines     PurchaseOrderLine[]
+  expenses  Expense[]
+  txns      MaterialTxn[]
+  requests  MaterialRequest[]
+
+  @@unique([companyId, number])
+  @@index([projectId, status])
+}
+
+model PurchaseOrderLine {
+  id          String  @id @default(cuid())
+  companyId   String
+  poId        String
+  materialId  String?
+  description String
+  quantity    Float
+  unit        String
+  rate        Decimal @default(0) @db.Decimal(12, 2)
+
+  company  Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  po       PurchaseOrder @relation(fields: [poId], references: [id], onDelete: Cascade)
+  material Material?     @relation(fields: [materialId], references: [id], onDelete: SetNull)
+
+  @@index([poId])
+}
+
+model BudgetLine {
+  id        String          @id @default(cuid())
+  companyId String
+  projectId String
+  category  ExpenseCategory
+  name      String
+  amount    Decimal         @db.Decimal(16, 2)
+  createdAt DateTime        @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model Expense {
+  id            String          @id @default(cuid())
+  companyId     String
+  projectId     String
+  category      ExpenseCategory
+  description   String
+  amount        Decimal         @db.Decimal(16, 2)
+  date          DateTime
+  invoiceNo     String?
+  supplierId    String?
+  contractorId  String?
+  poId          String?
+  status        ExpenseStatus   @default(PENDING)
+  approvedById  String?
+  paidAt        DateTime?
+  paymentMethod String?
+  paymentRef    String?
+  createdById   String
+  createdAt     DateTime        @default(now())
+
+  company    Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  supplier   Supplier?      @relation(fields: [supplierId], references: [id], onDelete: SetNull)
+  contractor Contractor?    @relation(fields: [contractorId], references: [id], onDelete: SetNull)
+  po         PurchaseOrder? @relation(fields: [poId], references: [id], onDelete: SetNull)
+  createdBy  User           @relation(fields: [createdById], references: [id], onDelete: Cascade)
+  raBill     RABill?
+
+  @@index([projectId, status])
+  @@index([companyId, date])
+}
+
+model Document {
+  id             String      @id @default(cuid())
+  companyId      String
+  projectId      String
+  title          String
+  category       DocCategory @default(OTHER)
+  audience       DocAudience @default(PROJECT)
+  discipline     String?
+  currentVersion Int         @default(1)
+  createdAt      DateTime    @default(now())
+
+  company      Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project      Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  versions     DocumentVersion[]
+  pinnedIssues Issue[]
+
+  @@index([projectId, category])
+}
+
+model DocumentVersion {
+  id           String   @id @default(cuid())
+  companyId    String
+  documentId   String
+  version      Int
+  storageKey   String   @unique
+  filename     String
+  mime         String
+  size         Int
+  note         String?
+  uploadedById String
+  createdAt    DateTime @default(now())
+
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploadedBy User     @relation(fields: [uploadedById], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, version])
+}
+
+// ── Phase 3: inspections, safety, delays, bills, sharing, push, warranties ───
+enum InspectionStatus {
+  OPEN
+  PASSED
+  FAILED
+}
+
+enum ItemResult {
+  PENDING
+  PASS
+  FAIL
+  NA
+}
+
+enum DelayCause {
+  WEATHER
+  MATERIAL
+  APPROVAL
+  LABOUR
+  DESIGN
+  EQUIPMENT
+  OTHER
+}
+
+enum BillStatus {
+  DRAFT
+  SUBMITTED
+  CERTIFIED
+  INVOICED
+}
+
+enum SafetyKind {
+  INCIDENT
+  NEAR_MISS
+  HAZARD
+}
+
+model InspectionTemplate {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  category  String?
+  items     String[]
+  createdAt DateTime @default(now())
+
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  inspections Inspection[]
+
+  @@index([companyId])
+}
+
+model Inspection {
+  id           String           @id @default(cuid())
+  companyId    String
+  projectId    String
+  taskId       String?
+  templateId   String?
+  parentId     String?
+  title        String
+  block        String?
+  floor        String?
+  locationArea String?
+  status       InspectionStatus @default(OPEN)
+  inspectorId  String
+  note         String?
+  clientId     String?
+  createdAt    DateTime         @default(now())
+  completedAt  DateTime?
+
+  company   Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project   Project             @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  task      Task?               @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  template  InspectionTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  inspector User                @relation(fields: [inspectorId], references: [id], onDelete: Cascade)
+  parent    Inspection?         @relation("Reinspect", fields: [parentId], references: [id], onDelete: SetNull)
+  children  Inspection[]        @relation("Reinspect")
+  items     InspectionItem[]
+  photos    ProgressPhoto[]
+
+  @@unique([companyId, clientId])
+  @@index([projectId, status])
+}
+
+model InspectionItem {
+  id           String     @id @default(cuid())
+  companyId    String
+  inspectionId String
+  position     Int
+  text         String
+  result       ItemResult @default(PENDING)
+  note         String?
+
+  company    Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  inspection Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  issues     Issue[]
+
+  @@index([inspectionId])
+}
+
+model DelayLog {
+  id          String     @id @default(cuid())
+  companyId   String
+  projectId   String
+  phaseId     String?
+  date        DateTime
+  cause       DelayCause
+  days        Float      @default(1)
+  note        String?
+  source      String     @default("MANUAL")
+  createdById String
+  createdAt   DateTime   @default(now())
+
+  company Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  phase   ProjectPhase? @relation(fields: [phaseId], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, date, cause])
+  @@index([projectId, date])
+}
+
+model RABill {
+  id            String     @id @default(cuid())
+  companyId     String
+  projectId     String
+  contractorId  String
+  number        String
+  periodFrom    DateTime
+  periodTo      DateTime
+  status        BillStatus @default(DRAFT)
+  retentionPct  Float      @default(5)
+  tdsPct        Float      @default(1)
+  gstPct        Float      @default(18)
+  notes         String?
+  createdById   String
+  certifiedById String?
+  expenseId     String?    @unique
+  createdAt     DateTime   @default(now())
+
+  company    Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project    Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  contractor Contractor   @relation(fields: [contractorId], references: [id], onDelete: NoAction)
+  expense    Expense?     @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+  lines      RABillLine[]
+
+  @@unique([companyId, number])
+  @@index([projectId, status])
+}
+
+model RABillLine {
+  id           String  @id @default(cuid())
+  companyId    String
+  billId       String
+  description  String
+  unit         String
+  quantity     Float
+  rate         Decimal @db.Decimal(12, 2)
+  prevQuantity Float   @default(0)
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bill    RABill  @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@index([billId])
+}
+
+model ClientShare {
+  id           String    @id @default(cuid())
+  companyId    String
+  projectId    String
+  tokenHash    String    @unique
+  label        String?
+  showActivity Boolean   @default(true)
+  expiresAt    DateTime?
+  revokedAt    DateTime?
+  createdById  String
+  createdAt    DateTime  @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model SafetyIncident {
+  id           String     @id @default(cuid())
+  companyId    String
+  projectId    String
+  kind         SafetyKind
+  severity     Severity   @default(MEDIUM)
+  description  String
+  block        String?
+  floor        String?
+  area         String?
+  injuredCount Int        @default(0)
+  actionsTaken String?
+  closed       Boolean    @default(false)
+  reportedById String
+  createdAt    DateTime   @default(now())
+  closedAt     DateTime?
+
+  company    Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project    Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  reportedBy User    @relation(fields: [reportedById], references: [id], onDelete: Cascade)
+
+  @@index([projectId, createdAt])
+}
+
+model ToolboxTalk {
+  id            String   @id @default(cuid())
+  companyId     String
+  projectId     String
+  topic         String
+  notes         String?
+  date          DateTime
+  conductedById String
+  createdAt     DateTime @default(now())
+
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project     Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  conductedBy User              @relation(fields: [conductedById], references: [id], onDelete: Cascade)
+  attendees   ToolboxAttendee[]
+
+  @@index([projectId, date])
+}
+
+model ToolboxAttendee {
+  talkId   String
+  workerId String
+
+  talk   ToolboxTalk @relation(fields: [talkId], references: [id], onDelete: Cascade)
+  worker Worker      @relation(fields: [workerId], references: [id], onDelete: Cascade)
+
+  @@id([talkId, workerId])
+}
+
+model Warranty {
+  id         String    @id @default(cuid())
+  companyId  String
+  projectId  String
+  item       String
+  provider   String?
+  startDate  DateTime
+  endDate    DateTime
+  notes      String?
+  notifiedAt DateTime?
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId, endDate])
+}
+
+// De-duplicates inbound WhatsApp deliveries (Meta retries).
+model WaInbound {
+  id        String   @id
+  userId    String?
+  createdAt DateTime @default(now())
 }

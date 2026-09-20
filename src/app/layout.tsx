@@ -1,9 +1,10 @@
 import type { Metadata, Viewport } from "next";
-import { Inter, Cormorant_Garamond, IBM_Plex_Mono } from "next/font/google";
+import { Inter, Cormorant_Garamond, IBM_Plex_Mono, Noto_Sans_Devanagari } from "next/font/google";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 const cormorant = Cormorant_Garamond({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-cormorant", display: "swap" });
+const deva = Noto_Sans_Devanagari({ subsets: ["devanagari"], weight: ["400", "500", "600", "700"], variable: "--font-deva", display: "swap" });
 const plex = IBM_Plex_Mono({ subsets: ["latin"], weight: ["400", "500"], variable: "--font-plex", display: "swap" });
 
 export const metadata: Metadata = {
@@ -17,7 +18,7 @@ export const viewport: Viewport = { themeColor: "#123C36", width: "device-width"
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${inter.variable} ${cormorant.variable} ${plex.variable}`}>
+    <html lang="en" className={`${inter.variable} ${cormorant.variable} ${plex.variable} ${deva.variable}`}>
       <body className="min-h-dvh">{children}</body>
     </html>
   );

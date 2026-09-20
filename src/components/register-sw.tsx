@@ -1,7 +1,7 @@
 "use client";
 import { useEffect } from "react";
 
-const WARM = ["/site", "/site/tasks", "/site/progress", "/site/more", "/site/notifications", "/site/add-progress", "/site/report-issue", "/site/site-update"];
+const WARM = ["/site", "/site/tasks", "/site/progress", "/site/more", "/site/notifications", "/site/add-progress", "/site/report-issue", "/site/site-update", "/site/attendance", "/site/materials", "/site/drawings"];
 
 /** Registers the ZUARI Site service worker (production only) and pre-caches the core screens. */
 export function RegisterSW() {

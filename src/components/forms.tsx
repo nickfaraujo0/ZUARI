@@ -29,7 +29,7 @@ export function ActionForm({ action, children, submit, className, reset, hideSub
   useEffect(() => { if (state?.ok && reset) ref.current?.reset(); }, [state, reset]);
   return (
     // Submitted via onSubmit (not the form `action` prop) so React 19 does not wipe the fields when the action returns an error.
-    <form ref={ref} onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget); startTransition(() => { run(fd); }); }} className={className}>
+    <form ref={ref} onSubmit={(e) => { e.preventDefault(); const fd = new FormData(e.currentTarget, (e.nativeEvent as SubmitEvent).submitter); startTransition(() => { run(fd); }); }} className={className}>
       {children}
       {state?.error && <p role="alert" className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{state.error}</p>}
       {state?.ok && state.message && <p role="status" className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-900">{state.message}</p>}

@@ -2,7 +2,7 @@ import { Images } from "lucide-react";
 import type { Prisma } from "@prisma/client";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { projectScope } from "@/lib/access";
+import { projectScope, requireManagerPage } from "@/lib/access";
 import { GroupedGallery } from "@/components/blocks";
 import { PhotoFilters } from "@/components/photo-filters";
 import { Card, EmptyState, PageHeader } from "@/components/ui";
@@ -12,11 +12,13 @@ export const metadata = { title: "Progress photos" };
 
 export default async function AllPhotos({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const u = await requireUser();
+  requireManagerPage(u);
   const sp = await searchParams;
   const day = parseDate(sp.date);
   const where: Prisma.ProgressPhotoWhereInput = {
     companyId: u.companyId, project: projectScope(u),
-    ...(sp.project ? { projectId: sp.project } : {}), ...(sp.user ? { userId: sp.user } : {}), ...(day ? { takenAt: { gte: day, lt: new Date(day.getTime() + 864e5) } } : {}),
+    ...(sp.project ? { projectId: sp.project } : {}), ...(sp.user ? { userId: sp.user } : {}),
+    ...(sp.block ? { block: { contains: sp.block, mode: "insensitive" as const } } : {}), ...(sp.floor ? { floor: { contains: sp.floor, mode: "insensitive" as const } } : {}), ...(day ? { takenAt: { gte: day, lt: new Date(day.getTime() + 864e5) } } : {}),
   };
   const [photos, projects, users] = await Promise.all([
     prisma.progressPhoto.findMany({ where, include: { task: { select: { title: true, phase: { select: { name: true } } } }, user: { select: { name: true } }, project: { select: { name: true } } }, orderBy: { takenAt: "desc" }, take: 200 }),

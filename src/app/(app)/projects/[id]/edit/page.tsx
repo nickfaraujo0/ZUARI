@@ -12,11 +12,11 @@ export default async function EditProject({ params }: { params: Promise<{ id: st
   const u = await requireUser();
   if (!isManager(u)) notFound();
   const p = await requireProject(u, (await params).id);
-  const managers = await prisma.user.findMany({ where: { companyId: u.companyId, active: true, role: { not: "SITE_SUPERVISOR" } }, select: { id: true, name: true, role: true }, orderBy: { name: "asc" } });
+  const managers = await prisma.user.findMany({ where: { companyId: u.companyId, active: true, role: { in: ["DIRECTOR", "PROJECT_MANAGER"] } }, select: { id: true, name: true, role: true }, orderBy: { name: "asc" } });
   return (
     <Card className="max-w-3xl">
       <CardHead title="Edit project" action={<Link href={`/projects/${p.id}`} className="text-xs text-river hover:underline">← Back</Link>} />
-      <div className="border-t border-line p-6"><ProjectForm managers={managers} project={{ ...p, budget: Number(p.budget) }} canPickManager={isDirector(u)} defaults={{ start: "", end: "", managerId: p.managerId ?? u.id }} /></div>
+      <div className="border-t border-line p-6"><ProjectForm managers={managers} project={{ ...p, budget: Number(p.budget), latitude: p.latitude, longitude: p.longitude }} canPickManager={isDirector(u)} defaults={{ start: "", end: "", managerId: p.managerId ?? u.id }} /></div>
     </Card>
   );
 }

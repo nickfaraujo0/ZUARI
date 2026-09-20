@@ -5,6 +5,10 @@ import { isManager, requireProject } from "@/lib/access";
 import { setProjectStatus } from "@/actions/projects";
 import { ActionForm, AutoSelect } from "@/components/forms";
 import { ActivityFeed, PhotoTile } from "@/components/blocks";
+import { WeatherCard } from "@/components/weather-card";
+import { SharePanel } from "@/components/share-panel";
+import { insightsFor } from "@/lib/insights";
+import { forecast, tasksAtRisk } from "@/lib/weather";
 import { Avatar, Card, CardHead, Chip, LinkButton, Progress, Stat } from "@/components/ui";
 import { dueLabel, formatINR, fmtDate, opts, PROJECT_STATUS, PRIORITY, PRIORITY_TONE, startOfToday, TASK_STATUS, TASK_TONE } from "@/lib/utils";
 
@@ -20,6 +24,10 @@ export default async function Overview({ params }: { params: Promise<{ id: strin
     prisma.progressPhoto.findMany({ where: { projectId: p.id }, include: { task: { select: { title: true } }, user: { select: { name: true } } }, orderBy: { takenAt: "desc" }, take: 4 }),
     prisma.issue.count({ where: { projectId: p.id, status: { in: ["OPEN", "ASSIGNED", "IN_PROGRESS"] } } }),
   ]);
+  const shares = isManager(u) ? await prisma.clientShare.findMany({ where: { projectId: p.id, companyId: u.companyId, revokedAt: null }, orderBy: { createdAt: "desc" } }) : [];
+  const insight = isManager(u) || u.role === "ACCOUNTANT" ? (await insightsFor(u)).find((i) => i.projectId === p.id) : undefined;
+  const days = p.latitude != null && p.longitude != null ? await forecast(p.latitude, p.longitude) : null;
+  const risks = days ? tasksAtRisk(await prisma.task.findMany({ where: { projectId: p.id, weatherSensitive: true, status: { in: ["NOT_STARTED", "IN_PROGRESS"] } }, select: { id: true, title: true, startDate: true, dueDate: true, weatherSensitive: true, status: true } }), days) : [];
   const left = Math.ceil((p.expectedEnd.getTime() - startOfToday().getTime()) / 864e5);
   return (
     <div className="space-y-6">
@@ -72,7 +80,12 @@ export default async function Overview({ params }: { params: Promise<{ id: strin
           )}
         </div>
         <div className="space-y-6">
+          {insight && (insight.level === "AT_RISK" || insight.level === "DELAYED") && insight.factors.length > 0 && (
+            <Card className="p-5"><h2 className="mb-2 text-[15px] font-semibold">Why this project needs attention</h2><ul className="space-y-1.5 text-sm">{insight.factors.map((f, n) => <li key={n} className="flex gap-2"><span className="mt-2 size-1.5 shrink-0 rounded-full bg-laterite" /><Link href={f.href} className="hover:underline">{f.text}</Link></li>)}</ul></Card>
+          )}
+          {p.latitude != null && p.longitude != null && <WeatherCard days={days} risks={risks} />}
           <Card><CardHead title="Recent activity" /><ActivityFeed items={activity} empty="Nothing yet. Updates from site will appear here." /></Card>
+          {isManager(u) && <SharePanel projectId={p.id} shares={shares} />}
           {isManager(u) && (
             <Card className="p-5">
               <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.16em] text-muted">Project status</p>

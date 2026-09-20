@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { SignJWT, jwtVerify } from "jose";
 import bcrypt from "bcryptjs";
 import { prisma } from "./db";
+import { isSiteRole } from "./roles";
 
 const COOKIE = "zuari_session";
 const MAX_AGE = 60 * 60 * 24 * 30;
@@ -45,4 +46,4 @@ export async function requireUser() {
   if (!u) redirect("/login");
   return u;
 }
-export const homeFor = (u: { role: string }) => (u.role === "SITE_SUPERVISOR" ? "/site" : "/dashboard");
+export const homeFor = (u: { role: string }) => (isSiteRole(u.role) ? "/site" : "/dashboard");

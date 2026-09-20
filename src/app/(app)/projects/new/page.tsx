@@ -10,7 +10,7 @@ export const metadata = { title: "New project" };
 export default async function NewProject() {
   const u = await requireUser();
   if (u.role !== "DIRECTOR") notFound();
-  const managers = await prisma.user.findMany({ where: { companyId: u.companyId, active: true, role: { not: "SITE_SUPERVISOR" } }, select: { id: true, name: true, role: true }, orderBy: { name: "asc" } });
+  const managers = await prisma.user.findMany({ where: { companyId: u.companyId, active: true, role: { in: ["DIRECTOR", "PROJECT_MANAGER"] } }, select: { id: true, name: true, role: true }, orderBy: { name: "asc" } });
   const today = startOfToday();
   return (
     <>

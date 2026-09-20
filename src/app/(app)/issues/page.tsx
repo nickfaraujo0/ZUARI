@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { issueScope } from "@/lib/access";
+import { issueScope, requireManagerPage } from "@/lib/access";
 import { IssuesList } from "@/components/issues";
 import { PageHeader } from "@/components/ui";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,7 @@ export const metadata = { title: "Issues" };
 
 export default async function AllIssues({ searchParams }: { searchParams: Promise<{ show?: string }> }) {
   const u = await requireUser();
+  requireManagerPage(u);
   const s = (await searchParams).show;
   const show = s === "closed" || s === "all" ? s : "open";
   const [issues, people] = await Promise.all([

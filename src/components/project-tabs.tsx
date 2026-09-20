@@ -8,7 +8,7 @@ export function ProjectTabs({ id, counts }: { id: string; counts: { tasks: numbe
   const base = `/projects/${id}`;
   const tabs = [
     { href: base, label: "Overview" }, { href: `${base}/timeline`, label: "Timeline" }, { href: `${base}/tasks`, label: "Tasks", n: counts.tasks },
-    { href: `${base}/site`, label: "Site" }, { href: `${base}/photos`, label: "Photos", n: counts.photos }, { href: `${base}/issues`, label: "Issues", n: counts.issues }, { href: `${base}/team`, label: "Team" },
+    { href: `${base}/site`, label: "Site" }, { href: `${base}/photos`, label: "Photos", n: counts.photos }, { href: `${base}/issues`, label: "Issues", n: counts.issues }, { href: `${base}/team`, label: "Team" }, { href: `${base}/documents`, label: "Documents" }, { href: `${base}/handover`, label: "Handover" },
   ];
   return (
     <nav className="scroll-hide -mb-px flex gap-1 overflow-x-auto border-b border-line" aria-label="Project sections">
@@ -20,7 +20,6 @@ export function ProjectTabs({ id, counts }: { id: string; counts: { tasks: numbe
           </Link>
         );
       })}
-      <span className="flex items-center gap-1.5 whitespace-nowrap px-4 py-3 text-sm text-muted/60" title="Coming soon">Documents<span className="rounded bg-stone-200/70 px-1.5 py-px text-[9px] uppercase tracking-wider">Soon</span></span>
     </nav>
   );
 }

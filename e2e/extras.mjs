@@ -33,7 +33,7 @@ try {
     await d.click('button:has-text("Save changes")'); await d.waitForURL(`**/projects/${pid}`);
     await see(d, `Extras Villa Renamed ${run}`); await see(d, "₹75.0 L");
   });
-  await step("Project workspace shows Documents as a clearly-marked coming-soon tab", async () => { await see(d, "Documents"); await see(d, "Soon"); });
+  await step("Project workspace has a working Documents tab (empty state, upload form)", async () => { await d.getByRole("link", { name: "Documents" }).first().click(); await d.waitForURL(/\/documents$/); await see(d, "No documents yet"); await see(d, "Upload a document"); });
   await step("Director updates profile", async () => {
     await d.goto(`${BASE}/profile`); await d.fill("[name=phone]", "+91 98000 00000"); await d.fill("[name=title]", "Managing Director");
     await d.click('button:has-text("Save profile")'); await see(d, "Profile saved");

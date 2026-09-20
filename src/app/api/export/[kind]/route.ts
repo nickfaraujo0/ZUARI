@@ -1,0 +1,50 @@
+import { getUser, type SessionUser } from "@/lib/auth";
+import { prisma } from "@/lib/db";
+import { isFinance, isManager, projectScope } from "@/lib/access";
+import { billTotals } from "@/lib/bills";
+import { toCsv } from "@/lib/csv";
+import { stockFor } from "@/lib/materials";
+import { tallyPayments } from "@/lib/tally";
+import { parseDate, startOfToday, toInputDate } from "@/lib/utils";
+
+type Rows = { name: string; rows: unknown[][]; xml?: string };
+const both = (u: SessionUser) => isManager(u) || isFinance(u);
+const num = (d: unknown) => Number(d);
+
+const TEMPLATES: Record<string, unknown[][]> = {
+  "template-workers": [["name", "trade", "daily_rate", "phone", "contractor"], ["Ramesh Gaonkar", "Mason", 900, "9822012345", ""]],
+  "template-materials": [["name", "unit", "category", "reorder_level"], ["Cement OPC 53", "bags", "Cement", 100]],
+  "template-suppliers": [["name", "category", "contact", "phone", "email", "gstin", "address"], ["Mandovi Cement Depot", "Cement", "Anil Prabhu", "9823044101", "sales@example.com", "30ABCDE1234F1Z5", "Panaji, Goa"]],
+  "template-contractors": [["name", "trade", "contact", "phone", "email", "gstin"], ["Fernandes Electricals", "Electrical", "Suresh Fernandes", "9890520001", "office@example.com", "30ABCDE1234F1Z5"]],
+};
+
+const EXPORTS: Record<string, { allow: (u: SessionUser) => boolean; run: (u: SessionUser, sp: URLSearchParams) => Promise<Rows> }> = {
+  tasks: { allow: isManager, run: async (u) => { const t = await prisma.task.findMany({ where: { companyId: u.companyId, project: projectScope(u) }, include: { project: { select: { name: true } }, phase: { select: { name: true } }, assignee: { select: { name: true } } }, orderBy: [{ projectId: "asc" }, { dueDate: "asc" }] }); return { name: "tasks", rows: [["Project", "Phase", "Task", "Assignee", "Priority", "Status", "Progress %", "Start", "Due", "Quantity done", "Quantity total", "Unit"], ...t.map((x) => [x.project.name, x.phase?.name, x.title, x.assignee?.name, x.priority, x.status, x.progress, x.startDate, x.dueDate, x.quantityTotal ? x.quantityDone : "", x.quantityTotal, x.quantityUnit])] }; } },
+  issues: { allow: isManager, run: async (u) => { const t = await prisma.issue.findMany({ where: { companyId: u.companyId, project: projectScope(u) }, include: { project: { select: { name: true } }, reporter: { select: { name: true } }, assignee: { select: { name: true } } }, orderBy: { createdAt: "desc" } }); return { name: "issues", rows: [["Project", "Title", "Severity", "Status", "Block", "Floor", "Area", "Reporter", "Assignee", "Created", "Due", "Resolved"], ...t.map((x) => [x.project.name, x.title, x.severity, x.status, x.block, x.floor, x.area, x.reporter.name, x.assignee?.name, x.createdAt, x.dueDate, x.resolvedAt])] }; } },
+  attendance: { allow: isManager, run: async (u, sp) => { const to = parseDate(sp.get("to")) ?? startOfToday(), from = parseDate(sp.get("from")) ?? new Date(to.getTime() - 30 * 864e5); const t = await prisma.attendance.findMany({ where: { companyId: u.companyId, project: projectScope(u), date: { gte: from, lte: to } }, include: { project: { select: { name: true } }, worker: true }, orderBy: [{ date: "asc" }, { projectId: "asc" }] }); return { name: "attendance", rows: [["Date", "Project", "Worker", "Trade", "Status", "Overtime hours", "Daily rate", "Estimated cost"], ...t.map((x) => [x.date, x.project.name, x.worker.name, x.worker.trade, x.status, x.overtimeHours, num(x.worker.dailyRate), num(x.worker.dailyRate) * (x.status === "PRESENT" ? 1 : x.status === "HALF" ? 0.5 : 0)])] }; } },
+  stock: { allow: isManager, run: async (u) => { const [ps, ms] = await Promise.all([prisma.project.findMany({ where: projectScope(u), select: { id: true, name: true } }), prisma.material.findMany({ where: { companyId: u.companyId } })]); const rows: unknown[][] = [["Project", "Material", "Unit", "Received", "Consumed", "Adjustments", "In stock", "Reorder level"]]; for (const p of ps) { const s = await stockFor(u.companyId, p.id); for (const m of ms) { const e = s.get(m.id); if (e) rows.push([p.name, m.name, m.unit, e.received, e.consumed, e.adjust, e.stock, m.reorderLevel]); } } return { name: "stock", rows }; } },
+  workers: { allow: isManager, run: async (u) => { const t = await prisma.worker.findMany({ where: { companyId: u.companyId }, include: { contractor: { select: { name: true } } }, orderBy: { name: "asc" } }); return { name: "workers", rows: [["Name", "Trade", "Daily rate", "Phone", "Contractor", "Active"], ...t.map((x) => [x.name, x.trade, num(x.dailyRate), x.phone, x.contractor?.name, x.active ? "yes" : "no"])] }; } },
+  contractors: { allow: both, run: async (u) => { const t = await prisma.contractor.findMany({ where: { companyId: u.companyId }, orderBy: { name: "asc" } }); return { name: "contractors", rows: [["Name", "Trade", "Contact", "Phone", "Email", "GSTIN", "Active"], ...t.map((x) => [x.name, x.trade, x.contactName, x.phone, x.email, x.gstin, x.active ? "yes" : "no"])] }; } },
+  suppliers: { allow: both, run: async (u) => { const t = await prisma.supplier.findMany({ where: { companyId: u.companyId }, orderBy: { name: "asc" } }); return { name: "suppliers", rows: [["Name", "Category", "Contact", "Phone", "Email", "GSTIN", "Address", "Active"], ...t.map((x) => [x.name, x.category, x.contactName, x.phone, x.email, x.gstin, x.address, x.active ? "yes" : "no"])] }; } },
+  expenses: { allow: isFinance, run: async (u) => { const t = await prisma.expense.findMany({ where: { companyId: u.companyId, project: projectScope(u) }, include: { project: { select: { name: true } }, supplier: { select: { name: true } }, contractor: { select: { name: true } } }, orderBy: { date: "desc" } }); return { name: "expenses", rows: [["Date", "Project", "Category", "Description", "Amount", "Status", "Invoice no", "Supplier", "Contractor", "Paid on", "Method", "Reference"], ...t.map((x) => [x.date, x.project.name, x.category, x.description, num(x.amount), x.status, x.invoiceNo, x.supplier?.name, x.contractor?.name, x.paidAt, x.paymentMethod, x.paymentRef])] }; } },
+  bills: { allow: both, run: async (u) => { const t = await prisma.rABill.findMany({ where: { companyId: u.companyId, project: projectScope(u) }, include: { project: { select: { name: true } }, contractor: { select: { name: true } }, lines: true }, orderBy: { createdAt: "desc" } }); return { name: "contractor-bills", rows: [["Bill", "Project", "Contractor", "Period from", "Period to", "Gross", "GST", "Retention", "TDS", "Net payable", "Status"], ...t.map((b) => { const x = billTotals(b.lines.map((l) => ({ quantity: l.quantity, rate: num(l.rate) })), b.retentionPct, b.tdsPct, b.gstPct); return [b.number, b.project.name, b.contractor.name, b.periodFrom, b.periodTo, x.gross, x.gst, x.retention, x.tds, x.net, b.status]; })] }; } },
+  tally: { allow: isFinance, run: async (u, sp) => {
+    const to = parseDate(sp.get("to")) ?? startOfToday(), from = parseDate(sp.get("from")) ?? new Date(to.getTime() - 30 * 864e5);
+    const [co, paid] = await Promise.all([prisma.company.findUniqueOrThrow({ where: { id: u.companyId } }), prisma.expense.findMany({ where: { companyId: u.companyId, project: projectScope(u), status: "PAID", paidAt: { gte: from, lte: to } }, include: { supplier: { select: { name: true } }, contractor: { select: { name: true } }, project: { select: { name: true } } }, orderBy: { paidAt: "asc" } })]);
+    const cat = (c: string) => `Site Expenses - ${c[0] + c.slice(1).toLowerCase()}`;
+    const xml = tallyPayments(co.name, co.tallyBankLedger, paid.map((e) => ({ date: e.paidAt!, party: e.supplier?.name ?? e.contractor?.name ?? cat(e.category), amount: num(e.amount), narration: `${e.description} | ${e.project.name}${e.invoiceNo ? ` | Inv ${e.invoiceNo}` : ""}${e.paymentRef ? ` | Ref ${e.paymentRef}` : ""}`, guid: `zuari-${e.id}` })));
+    return { name: "tally-payments", rows: [], xml };
+  } },
+};
+
+export async function GET(req: Request, ctx: { params: Promise<{ kind: string }> }) {
+  const u = await getUser();
+  if (!u) return new Response("Unauthorized", { status: 401 });
+  const { kind } = await ctx.params, stamp = toInputDate(startOfToday());
+  if (TEMPLATES[kind]) return new Response(toCsv(TEMPLATES[kind]), { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="zuari-${kind}.csv"` } });
+  const def = EXPORTS[kind];
+  if (!def || !def.allow(u)) return new Response("Not found", { status: 404 });
+  const out = await def.run(u, new URL(req.url).searchParams);
+  if (out.xml) return new Response(out.xml, { headers: { "Content-Type": "application/xml; charset=utf-8", "Content-Disposition": `attachment; filename="zuari-${out.name}-${stamp}.xml"` } });
+  return new Response(toCsv(out.rows), { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": `attachment; filename="zuari-${out.name}-${stamp}.csv"`, "Cache-Control": "private, no-store" } });
+}

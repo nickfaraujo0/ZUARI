@@ -58,3 +58,22 @@ ${o.join("\n")}
 <text x="${W - 24}" y="${H - 20}" text-anchor="end" font-family="sans-serif" font-size="15" letter-spacing="3" fill="#fff" opacity=".55">ZUARI DEMO IMAGE</text></svg>`;
   return sharp(Buffer.from(svg)).jpeg({ quality: 78 }).toBuffer();
 }
+
+/** Simple architectural plan drawing (PNG) used for demo drawings. */
+export async function plan(title: string, seed: number, rev = "A"): Promise<Buffer> {
+  const r = rng(seed * 31 + 7), W = 1400, H = 1000;
+  const cols = [0, 420, 800, 1160], rows = [0, 330, 640];
+  const names = ["Living", "Dining", "Kitchen", "Bedroom 1", "Bedroom 2", "Bath", "Utility", "Study", "Verandah"];
+  const rooms: string[] = [];
+  let n = 0;
+  for (let j = 0; j < 2; j++) for (let i = 0; i < 3; i++) {
+    const x = 120 + cols[i] * 0.9 + (i === 1 ? r() * 10 : 0), y = 130 + rows[j] * 1.0, w = (cols[i + 1] - cols[i]) * 0.9, h = 300;
+    rooms.push(`<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="none" stroke="#123C36" stroke-width="6"/><text x="${x + w / 2}" y="${y + h / 2}" text-anchor="middle" font-family="sans-serif" font-size="26" fill="#123C36">${names[n++]}</text><text x="${x + w / 2}" y="${y + h / 2 + 30}" text-anchor="middle" font-family="sans-serif" font-size="16" fill="#6B7572">${(w / 100).toFixed(1)} × ${(h / 100).toFixed(1)} m</text><path d="M${x + 40} ${y + h} h60" stroke="#F5F2EA" stroke-width="10"/><path d="M${x + 40} ${y + h - 4} a60 60 0 0 1 60 -60" stroke="#3F6868" fill="none" stroke-width="2"/>`);
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="#F5F2EA"/>
+<defs><pattern id="g" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M40 0H0V40" fill="none" stroke="#E4DFD2" stroke-width="1"/></pattern></defs><rect x="60" y="60" width="${W - 120}" height="${H - 120}" fill="url(#g)" stroke="#123C36" stroke-width="2"/>
+${rooms.join("\n")}
+<g transform="translate(1250 150)"><circle r="36" fill="none" stroke="#123C36" stroke-width="3"/><path d="M0 -30 L10 10 L0 2 L-10 10Z" fill="#123C36"/><text y="62" text-anchor="middle" font-family="sans-serif" font-size="18" fill="#123C36">N</text></g>
+<rect x="900" y="830" width="440" height="130" fill="#fff" stroke="#123C36" stroke-width="2"/><text x="920" y="868" font-family="serif" font-size="30" fill="#123C36">${title}</text><text x="920" y="900" font-family="sans-serif" font-size="16" fill="#6B7572">Scale 1:100 · Rev ${rev} · ZUARI DEMO DRAWING</text><text x="920" y="928" font-family="sans-serif" font-size="14" fill="#6B7572">Coastal India Constructions</text></svg>`;
+  return sharp(Buffer.from(svg)).png().toBuffer();
+}

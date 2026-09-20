@@ -1,6 +1,7 @@
 import "server-only";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
+import { isSiteRole } from "./roles";
 import { addDays, startOfToday, type Health } from "./utils";
 
 type Tx = Prisma.TransactionClient | typeof prisma;
@@ -19,7 +20,9 @@ export async function notify(
 ) {
   const ids = [...new Set(userIds.filter((x): x is string => !!x && x !== exceptUserId))];
   if (!ids.length) return;
-  await db.notification.createMany({ data: ids.map((userId) => ({ companyId, userId, ...n })), skipDuplicates: true });
+  const r = await db.notification.createMany({ data: ids.map((userId) => ({ companyId, userId, ...n })), skipDuplicates: true });
+  // Mirror new notifications to web push / WhatsApp (best effort, never blocks or fails the caller).
+  if (r.count > 0) void import("./delivery").then((m) => m.deliver(companyId, ids, n)).catch(() => {});
 }
 
 /** Who should hear about project events: the manager plus all directors. */
@@ -57,8 +60,9 @@ export async function nextProjectCode(companyId: string) {
 
 /** Overdue tasks generate one notification per task (deduplicated). Cheap; runs on layout load. */
 export async function syncOverdueNotifications(u: { id: string; companyId: string; role: string }) {
+  if (u.role === "ACCOUNTANT") return;
   const where: Prisma.TaskWhereInput =
-    u.role === "SITE_SUPERVISOR"
+    isSiteRole(u.role)
       ? { assigneeId: u.id }
       : u.role === "PROJECT_MANAGER"
         ? { project: { managerId: u.id } }
@@ -72,7 +76,7 @@ export async function syncOverdueNotifications(u: { id: string; companyId: strin
   await prisma.notification.createMany({
     data: overdue.map((t) => ({
       companyId: u.companyId, userId: u.id, type: "TASK_OVERDUE", title: "Task overdue", body: t.title,
-      href: u.role === "SITE_SUPERVISOR" ? `/site/tasks/${t.id}` : `/projects/${t.projectId}/tasks`, dedupeKey: `overdue:${t.id}`,
+      href: isSiteRole(u.role) ? `/site/tasks/${t.id}` : `/projects/${t.projectId}/tasks`, dedupeKey: `overdue:${t.id}`,
     })),
     skipDuplicates: true,
   });

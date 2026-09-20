@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
-import { requireProject, taskScope } from "@/lib/access";
+import { isManager, requireProject, taskScope } from "@/lib/access";
 import { TaskForm, TasksTable } from "@/components/tasks";
 import { Card, CardHead } from "@/components/ui";
 import { cn, TASK_STATUS } from "@/lib/utils";
@@ -24,17 +24,17 @@ export default async function ProjectTasks({ params, searchParams }: { params: P
   const tabs = [["", "All"], ["open", "Open"], ...Object.entries(TASK_STATUS)];
   return (
     <div className="space-y-6">
-      <Card>
+      {isManager(u) && <Card>
         <details>
           <summary className="flex cursor-pointer list-none items-center justify-between px-5 py-4"><span className="text-[15px] font-semibold">Create task</span><span className="text-xs text-river">+ New</span></summary>
           <div className="border-t border-line p-5"><TaskForm projectId={p.id} phases={phases} people={people} /></div>
         </details>
-      </Card>
+      </Card>}
       <Card>
         <CardHead title="Tasks" action={
           <div className="flex gap-1 text-xs">{tabs.map(([k, l]) => <Link key={k} href={k ? `?status=${k}` : "?"} className={cn("rounded-full px-3 py-1", (status ?? "") === k ? "bg-river text-ivory" : "text-muted hover:bg-stone-100")}>{l}</Link>)}</div>
         } />
-        <TasksTable tasks={tasks} />
+        <TasksTable tasks={tasks} canManage={isManager(u)} />
       </Card>
     </div>
   );

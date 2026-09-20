@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowRight, Images, TriangleAlert } from "lucide-react";
+import { ArrowRight, CloudRain, Images, TriangleAlert } from "lucide-react";
+import { forecast, tasksAtRisk } from "@/lib/weather";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/db";
 import { issueScope } from "@/lib/access";
@@ -23,6 +24,10 @@ export default async function Dashboard() {
     prisma.activityLog.findMany({ where: { companyId: u.companyId, projectId: { in: ids } }, include: { project: { select: { id: true, name: true } } }, orderBy: { createdAt: "desc" }, take: 9 }),
     prisma.progressPhoto.findMany({ where: { companyId: u.companyId, projectId: { in: ids } }, include: { task: { select: { title: true } }, user: { select: { name: true } }, project: { select: { name: true } } }, orderBy: { takenAt: "desc" }, take: 6 }),
   ]);
+  const placed = projects.filter((p) => p.latitude != null && p.longitude != null);
+  const wx = await Promise.all(placed.map(async (p) => ({ p, days: await forecast(p.latitude!, p.longitude!) })));
+  const wxTasks = placed.length ? await prisma.task.findMany({ where: { companyId: u.companyId, projectId: { in: placed.map((p) => p.id) }, weatherSensitive: true, status: { in: ["NOT_STARTED", "IN_PROGRESS"] } }, select: { id: true, title: true, projectId: true, startDate: true, dueDate: true, weatherSensitive: true, status: true } }) : [];
+  const alerts = wx.flatMap(({ p, days }) => (days ? tasksAtRisk(wxTasks.filter((t) => t.projectId === p.id), days).map((r) => ({ p, r })) : []));
   const active = projects.filter((p) => p.status === "ACTIVE");
   const avg = active.length ? Math.round(active.reduce((a, p) => a + p.progress, 0) / active.length) : 0;
   const attention = projects.filter((p) => p.health === "AT_RISK" || p.health === "DELAYED").length;
@@ -102,6 +107,12 @@ export default async function Dashboard() {
               </ul>
             )}
           </Card>
+          {alerts.length > 0 && (
+            <Card>
+              <CardHead title="Weather alerts" sub="Rain forecast on weather-sensitive work" />
+              <ul className="divide-y divide-line/70 border-t border-line/70">{alerts.slice(0, 6).map(({ p, r }) => <li key={r.task.id}><Link href={`/projects/${p.id}`} className="flex items-center gap-3 px-5 py-3 hover:bg-stone-50"><CloudRain className="size-4 shrink-0 text-laterite" /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{r.task.title}</span><span className="text-xs text-muted">{p.name} · rain on {r.days.slice(0, 3).map((d) => fmtShort(new Date(d + "T00:00:00+05:30"))).join(", ")}</span></span></Link></li>)}</ul>
+            </Card>
+          )}
         </div>
 
         <div className="space-y-6">
